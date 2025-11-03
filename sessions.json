@@ -1,0 +1,12 @@
+{
+  "::1": {
+    "step": "none",
+    "context": "sales",
+    "topic": "payments",
+    "awaitingQuoteDecision": true,
+    "pendingTypo": null,
+    "salesLead": {},
+    "lastMessage": "card providers",
+    "timestamp": 1762117717055
+  }
+}

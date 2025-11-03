@@ -1,0 +1,461 @@
+[
+  {
+    "questions": [
+      "giveavoucher email not received",
+      "did not get my giveavoucher email",
+      "voucher email missing",
+      "give a voucher not arrived",
+      "giveavoucher email failed",
+      "giveavoucher email in spam"
+    ],
+    "answers": [
+      "📩 Step 1: Check your junk, spam or clutter folder — sometimes voucher emails are filtered there.",
+      "Step 2: Confirm that the email address entered during purchase was correct (a small typo can stop delivery).",
+      "Step 3: Check whether the voucher was scheduled for a future delivery date. If so, it won’t send until that date.",
+      "Step 4: If you still can’t find it, search your inbox for 'GiveaVoucher' or 'gift voucher'.",
+      "Step 5: If all else fails, contact the retailer’s support team — they can resend or verify the voucher delivery."
+    ]
+  },
+  {
+    "questions": [
+      "giveavoucher new site setup",
+      "how do i set up a new giveavoucher site",
+      "create giveavoucher account",
+      "how to set up giveavoucher store",
+      "new retailer giveavoucher setup"
+    ],
+    "answers": [
+      "🛠️ Step 1: Complete KYC verification for your business — this allows payments to settle directly into your account.",
+      "Step 2: Once verified, open Tapa Office → Gift Vouchers → GiveaVoucher Setup Assistant.",
+      "Step 3: Add your voucher templates — either fixed denominations (e.g. £25, £50) or open-priced vouchers.",
+      "Step 4: Choose how to sell — use your unique GiveaVoucher.com link, add a button on your website, or embed the widget.",
+      "Step 5: Test a small order to confirm payments and email delivery are working correctly."
+    ]
+  },
+  {
+    "questions": [
+      "giveavoucher order issue",
+      "problem with giveavoucher order",
+      "giveavoucher payment pending",
+      "giveavoucher not finalised",
+      "giveavoucher payment not completed",
+      "giveavoucher order failed"
+    ],
+    "answers": [
+      "🧾 Step 1: Ask the customer to check their banking app to see if the payment shows as pending or completed.",
+      "Step 2: In Tapa Office → Gift Vouchers → Orders, check whether the order is marked Pending or Finalised.",
+      "Step 3: If it’s still pending, wait a few minutes — some payments can take a short time to confirm.",
+      "Step 4: If the order never finalises, check your internet connection or payment gateway status.",
+      "Step 5: If the problem persists, contact RST EPOS Support with the customer’s order number for investigation."
+    ]
+  },
+  {
+    "questions": [
+      "giveavoucher programming",
+      "how do i program giveavoucher",
+      "set up voucher denominations",
+      "open priced vouchers",
+      "promotional vouchers setup",
+      "giveavoucher configuration"
+    ],
+    "answers": [
+      "⚙️ Step 1: Go to Tapa Office → Gift Vouchers → Templates.",
+      "Step 2: To create fixed vouchers, enter set amounts such as £25, £50 or £100.",
+      "Step 3: To create open-priced vouchers, enable the 'Open Price' option so customers can choose the amount.",
+      "Step 4: For promotions, go to Gift Vouchers → Promotions to configure discount or bonus voucher campaigns.",
+      "Step 5: Preview your templates before publishing to ensure branding and expiry settings are correct."
+    ]
+  },
+  {
+    "questions": [
+      "giveavoucher refund request",
+      "how do i refund a giveavoucher",
+      "refund a voucher",
+      "giveavoucher customer refund",
+      "issue a voucher refund",
+      "giveavoucher refund process"
+    ],
+    "answers": [
+      "💸 Step 1: The customer should contact the retailer that issued the voucher — refunds must come directly from them.",
+      "Step 2: The retailer logs into Tapa Office → Gift Vouchers → Orders.",
+      "Step 3: Locate the original voucher order and choose Refund.",
+      "Step 4: Confirm the refund reason and authorise the transaction.",
+      "Step 5: Inform the customer — funds will return to their payment method depending on their bank’s processing time."
+    ]
+  },
+  {
+    "questions": [
+      "no emailed report arrived",
+      "report not received by email",
+      "sales report email missing",
+      "daily report not sent",
+      "no sales report email",
+      "missing daily sales report",
+      "back office report not delivered"
+    ],
+    "answers": [
+      "📊 Step 1: Check your junk or spam folder — sometimes automated reports can be filtered by your email provider.",
+      "Step 2: Confirm that the report schedule is active in **Tapa Office → Reports → Scheduled Reports**.",
+      "Step 3: Make sure your user account email address is correct in **Tapa Office → Employees → Back Office Users**.",
+      "Step 4: If your email server uses filtering or quarantine, whitelist **noreply@rstepos.com** to ensure delivery.",
+      "Step 5: If you still don’t receive the report, try running it manually from the Reports section or contact our support team to check your configuration."
+    ]
+  },
+  {
+    "questions": [
+      "barcode scanner not lighting up",
+      "barcode scanner light off",
+      "scanner not powering on",
+      "usb scanner no light"
+    ],
+    "answers": [
+      "🔦 Step 1: Check the USB cable is fully seated in both the scanner and the POS terminal.",
+      "Step 2: Try a different USB port to rule out a faulty connection.",
+      "Step 3: Restart the POS terminal — scanners initialise during startup.",
+      "Step 4: Avoid unpowered USB hubs — scanners draw full current from the port.",
+      "Step 5: If still no light, test on another device to confirm hardware fault."
+    ]
+  },
+  {
+    "questions": [
+      "barcode scanner no power",
+      "scanner not working",
+      "scanner dead",
+      "scanner disconnected"
+    ],
+    "answers": [
+      "⚡ Step 1: Confirm the scanner is connected directly to a powered USB port.",
+      "Step 2: Test the scanner on another POS or PC to confirm if it powers up.",
+      "Step 3: Inspect the cable for frays or bent pins.",
+      "Step 4: Try another USB cable if available.",
+      "Step 5: If it still won’t power, the scanner may require replacement."
+    ]
+  },
+  {
+    "questions": [
+      "cash drawer not opening",
+      "drawer stuck closed",
+      "till drawer won’t open"
+    ],
+    "answers": [
+      "💰 Step 1: Check that the RJ11/RJ12 cable is plugged firmly into the printer’s drawer port.",
+      "Step 2: Ensure the printer is powered and online — the drawer opens via a printer pulse.",
+      "Step 3: Complete a sale in TapaPOS to trigger the drawer.",
+      "Step 4: Try a different drawer cable to rule out a faulty lead.",
+      "Step 5: If still not opening, the solenoid may need to be replaced."
+    ]
+  },
+  {
+    "questions": [
+      "chip and pin cannot connect",
+      "ped not connecting",
+      "tapapay ped offline",
+      "chip and pin device not connecting"
+    ],
+    "answers": [
+      "📶 Step 1: Check the PED’s Wi-Fi connection — reconnect if dropped.",
+      "Step 2: Restart the PED to refresh the network link.",
+      "Step 3: Confirm it shows as Connected under *TapaPay → Devices* in Tapa Office.",
+      "Step 4: Verify that your site Wi-Fi is online and stable.",
+      "Step 5: If it still won’t connect, contact RST Support to check pairing and credentials."
+    ]
+  },
+  {
+    "questions": [
+      "pos boot disk failure",
+      "boot disk failure message",
+      "till says boot disk failure"
+    ],
+    "answers": [
+      "💾 Step 1: Turn the POS off, wait 10 seconds, then turn it back on.",
+      "Step 2: Make sure nothing like a USB drive is plugged in that could stop it starting.",
+      "Step 3: If it still shows the same message, contact support — the system may need to be reinstalled."
+    ]
+  },
+  {
+    "questions": [
+      "pos blue screen",
+      "windows blue screen",
+      "till crashed blue screen"
+    ],
+    "answers": [
+      "💻 Step 1: Note any message or code shown on the screen.",
+      "Step 2: Turn the terminal off and back on again.",
+      "Step 3: If it happens again, tell support the code you saw — it helps them fix it faster."
+    ]
+  },
+  {
+    "questions": [
+      "network cable fault",
+      "pos network issue",
+      "till not connecting to network"
+    ],
+    "answers": [
+      "🔌 Step 1: Always check cables are secure, not damaged, and unplug then plug back in.",
+      "Step 2: Look for any visible damage or bent connectors.",
+      "Step 3: If you have a spare cable, try swapping it.",
+      "Step 4: Restart the till and test again."
+    ]
+  },
+  {
+    "questions": [
+      "wifi not connecting",
+      "pos wifi issue",
+      "till not connecting to wifi"
+    ],
+    "answers": [
+      "📶 Step 1: Check other devices (like a phone) to see if the Wi-Fi is working.",
+      "Step 2: Make sure Wi-Fi is turned on in the POS network settings.",
+      "Step 3: Select your Wi-Fi name again and re-enter the password carefully.",
+      "Step 4: Move the POS closer to the router if the signal is weak.",
+      "Step 5: Restart both the router and the POS.",
+      "Step 6: Always check cables to the router are secure, not damaged, and unplug then plug back in.",
+      "Step 7: If the POS still won’t connect, contact support."
+    ]
+  },
+  {
+    "questions": [
+      "pos no power",
+      "till not turning on",
+      "pos dead"
+    ],
+    "answers": [
+      "⚡ Step 1: Always check the power cable is secure, not damaged, and unplug then plug back in.",
+      "Step 2: Make sure the plug is switched on.",
+      "Step 3: Look for a light on the power supply — if it’s off, check the socket or try another one.",
+      "Step 4: Try a different socket or cable if available.",
+      "Step 5: If still no lights or sounds, contact support."
+    ]
+  },
+  {
+    "questions": [
+      "printer not printing",
+      "printer won't print",
+      "printer stopped printing"
+    ],
+    "answers": [
+      "🖨️ Step 1: Always check the cable between the printer and till is secure, not damaged, and unplug then plug back in.",
+      "Step 2: Make sure the printer is switched on and has paper.",
+      "Step 3: Check that the correct printer is selected on your POS.",
+      "Step 4: Restart both till and printer.",
+      "Step 5: Try a test print if your printer has a feed or test button."
+    ]
+  },
+  {
+    "questions": [
+      "touch unresponsive",
+      "touch not working",
+      "pos touch dead"
+    ],
+    "answers": [
+      "🖱️ Step 1: Make sure the screen is clean and dry.",
+      "Step 2: Always check any cables going to the screen are secure, not damaged, and unplug then plug back in.",
+      "Step 3: Restart the POS.",
+      "Step 4: Try plugging in a USB mouse to continue using the POS.",
+      "Step 5: If still not working, contact support."
+    ]
+  },
+  {
+    "questions": [
+      "who can call support",
+      "who can contact rst support",
+      "what is a primary contact",
+      "how do i change a primary contact"
+    ],
+    "answers": [
+      "<strong>👤 Who Can Call?</strong><br>Anyone from a covered customer site can call the RST EPoS Support Centre for help.<br><br><strong>🏷️ Primary Contacts</strong><br>Each customer site has one or more designated <em>Primary Contacts</em> (usually senior or experienced staff) who act as the main liaison for support.<br><br><strong>🔄 Changing Contacts</strong><br>If a Primary Contact changes, please let us know immediately so we can update your site record.<br><br>When requesting an update, be ready to provide:<br>• Company/Site Name<br>• Former Contact Name<br>• New Contact Name<br>• Address<br>• Phone and Email"
+    ]
+  },
+  {
+    "questions": [
+      "what should i do before calling support",
+      "what to check before calling rst support",
+      "how can i prepare before phoning support"
+    ],
+    "answers": [
+      "<strong>📞 Before You Call</strong><br>Try these quick checks before contacting the Support Centre — they can often resolve your issue faster:<br><br>• Confirm the problem is related to your RST EPoS system (not your network, power, or third-party software).<br>• Try to reproduce the problem — it may be a one-off or simple input error.<br>• Check obvious things like cabling, power, and login details.<br>• Review any manuals or on-screen help.<br>• Note any recent changes to your setup that may have caused the issue.<br><br>Doing these steps first helps our team assist you more efficiently."
+    ]
+  },
+  {
+    "questions": [
+      "how does rst provide support",
+      "what kind of telephone support do you offer",
+      "what is sugarcrm used for"
+    ],
+    "answers": [
+      "<strong>☎️ Telephone Support</strong><br>RST EPoS provides high-quality support to help you get the most from your hardware and software.<br><br>All calls are logged and tracked in our <em>CRM</em> system to ensure efficiency and consistent follow-up.<br><br>Our goal is to deliver fast, accurate resolutions and maximum customer satisfaction for all active support contract holders."
+    ]
+  },
+  {
+    "questions": [
+      "what are rst support contact details",
+      "how do i contact rst support",
+      "support phone number",
+      "helpdesk phone number",
+      "afterhours number"
+    ],
+    "answers": [
+      "<strong>📞 Standard Support</strong><br>028 7186 5610<br><em>Available 9am–5pm, weekdays</em><br><br><strong>🌙 Afterhours Support</strong><br>028 7186 0361<br><em>Available 5pm–9pm weekdays, 9am–9pm weekends &amp; holidays</em><br><br>⚠️ Afterhours support is for urgent issues only.<br>💬 Support is available to RST EPOS customers with an active contract.<br><br>📧 Email: <a href='mailto:support@rstepos.com'>support@rstepos.com</a>"
+    ]
+  },
+  {
+  "questions": [
+    "how are support calls logged",
+    "what happens when i contact support",
+    "how do i get a case number",
+    "how can i track my support case",
+    "what does my case number mean",
+    "how are issues prioritised",
+    "what are rst support response times",
+    "how do i check progress on my case"
+  ],
+  "answers": [
+    "📋 Every support request (by phone, email or web form) is logged in our call tracking system and given a <strong>unique case number</strong>. This number lets you and our team track progress until your issue is resolved. <br><br>📌 Always note your case number — you’ll need it if you call for an update.",
+    "🧾 When you contact RST Support, your request is recorded in our system and assigned a <strong>case number</strong>. Each case is reviewed, prioritised, and handled according to its impact and urgency.",
+    "🔢 Your <strong>case number</strong> is your support reference. Quote this number whenever you contact us so we can instantly access your call history and updates.",
+    "🔍 To check progress, contact the RST Support Centre with your <strong>case number</strong>. Our system tracks all updates and responses linked to your case.",
+    "⚡ Support issues are given a <strong>priority level</strong> based on urgency and impact: <br>• High – System down or unable to trade<br>• Medium – Performance affected but operational<br>• Low – General query or minor issue<br><br>The priority determines how quickly we respond and resolve the case.",
+    "⏱️ Each priority level has a <strong>target response time</strong>. High-priority cases are handled immediately, while lower priorities follow standard service levels.",
+    "👥 Priority is decided by our Support Specialists based on the information you provide. If you believe your case is more urgent, contact Support and explain the impact — we’ll review and adjust if needed."
+  ]
+},
+{
+  "questions": [
+    "what happens with out of hours calls",
+    "how are afterhours calls handled",
+    "can i get support after 5pm",
+    "is there emergency support at weekends",
+    "what if i call when support is closed"
+  ],
+  "answers": [
+    "🌙 <strong>Afterhours Support</strong><br>Calls received outside normal business hours are routed to our <strong>afterhours support line</strong>. This service is available for <strong>urgent issues only</strong> such as system outages or payment failures.<br><br>📞 <strong>Afterhours Number:</strong> 028 7186 0361<br><em>Available 5pm–9pm weekdays, 9am–9pm weekends &amp; holidays</em><br><br>💬 If your issue is not urgent, please leave a message or email <a href='mailto:support@rstepos.com'>support@rstepos.com</a>. Your request will be logged in our call tracking system and handled at the next available opportunity."
+  ]
+},
+{
+  "questions": [
+    "what counts as an urgent issue",
+    "what issues are classed as urgent",
+    "when should i call afterhours",
+    "what problems qualify for emergency support",
+    "is my issue urgent"
+  ],
+  "answers": [
+    "⚠️ <strong>Urgent issues</strong> are problems that <strong>stop you from trading or taking payments</strong> and need immediate attention.<br><br>Examples include:<br>• POS system not starting or frozen<br>• PED or card terminal not connecting<br>• Till unable to process sales<br>• Network or server failure affecting all tills<br><br>💬 For these situations, call the <strong>afterhours support line: 028 7186 0361</strong>.<br><br>📩 For non-urgent issues — such as reporting errors, general questions, or menu updates — please email <a href='mailto:support@rstepos.com'>support@rstepos.com</a> and we’ll respond during the next business hours."
+  ]
+},
+  {
+    "questions": [
+      "do i need a support contract",
+      "who gets rst support",
+      "can i get support without a contract",
+      "what if my support contract expired",
+      "how do i renew support"
+    ],
+    "answers": [
+      "🧾 RST Support is available to customers with an active <strong>support contract</strong>.<br><br>📅 If your contract has expired, please contact our sales team to renew it and restore access to technical support.<br><br>💬 You can check your current coverage by calling <strong>028 7186 5610</strong> or emailing <a href='mailto:support@rstepos.com'>support@rstepos.com</a>."
+    ]
+  },
+  {
+    "questions": [
+      "how do i get an update on my case",
+      "how do i escalate a support call",
+      "case taking too long",
+      "how to chase support case",
+      "who do i contact for update"
+    ],
+    "answers": [
+      "🔍 You can request an update by quoting your <strong>case number</strong> when calling or emailing the Support Centre.<br><br>⏫ If you feel your issue needs escalation, ask for a <strong>Support Supervisor</strong> — they can review the case priority and progress.<br><br>📞 Call <strong>028 7186 5610</strong> or email <a href='mailto:support@rstepos.com'>support@rstepos.com</a> and include your case number."
+    ]
+  },
+  {
+    "questions": [
+      "what are your support hours",
+      "when is support open",
+      "support opening times",
+      "support hours of operation",
+      "when can i call rst support"
+    ],
+    "answers": [
+      "🕓 <strong>Standard Hours</strong><br>Monday–Friday, 9am–5pm<br><br>🌙 <strong>Afterhours Support</strong><br>Weekdays 5pm–9pm, Weekends &amp; Holidays 9am–9pm<br><br>⚠️ Afterhours support is reserved for <strong>urgent issues only</strong> such as system or payment outages."
+    ]
+  },
+  {
+    "questions": [
+      "how long for email reply",
+      "when will support reply to my email",
+      "average response time",
+      "how quickly do rst respond",
+      "email support delay"
+    ],
+    "answers": [
+      "📧 Emails sent to <a href='mailto:support@rstepos.com'>support@rstepos.com</a> are logged automatically and assigned a case number.<br><br>🕒 Our typical response time during business hours is <strong>within 4 hours</strong> depending on priority level.<br><br>Messages received outside hours are handled the next business day."
+    ]
+  },
+  {
+    "questions": [
+      "do you support third party systems",
+      "my integration is not working",
+      "problem with hotel link",
+      "problem with resdiary or guestline",
+      "third party connection issue"
+    ],
+    "answers": [
+      "🔗 RST EPoS integrates with a range of third-party systems such as <strong>Protel, Guestline, MEWS, ResDiary</strong> and others.<br><br>🧩 If your integration stops working, first confirm your internet connection and credentials.<br><br>If the issue persists, contact RST Support with details of the system affected — we’ll log a case and investigate."
+    ]
+  },
+  {
+    "questions": [
+      "how do i make a complaint",
+      "how can i give feedback on support",
+      "support complaint process",
+      "not happy with service"
+    ],
+    "answers": [
+      "💬 We value your feedback. If you’re unhappy with how a case was handled or wish to submit feedback, please email <a href='mailto:support@rstepos.com'>support@rstepos.com</a> with your <strong>case number</strong> and details.<br><br>Our management team will review your case and follow up promptly."
+    ]
+  },
+  {
+    "questions": [
+      "how do you connect remotely",
+      "remote support link",
+      "how can support connect to my till",
+      "rst remote access"
+    ],
+    "answers": [
+      "🖥️ RST Support can connect securely to your till using our approved <strong>Teamviewer</strong>.<br><br>When requested, visit <a href='https://support.rstepos.com'>support.rstepos.com</a> and follow the on-screen instructions.<br><br>⚠️ Only authorise connections when asked by an RST Support Specialist."
+    ]
+  },
+{
+  "questions": [
+    "what types of promotions can i run on GiveaVoucher",
+    "giveavoucher promotion types",
+    "examples of giveavoucher promotions",
+    "how do i create a giveavoucher promotion type",
+    "what are the options for voucher promotions"
+  ],
+  "answers": [
+    "Here are the promotion types you can run on GiveaVoucher:",
+    "• Get Extra Value – A customer buys a voucher (e.g. £50) and the recipient receives extra value (e.g. £60).",
+    "• Get Percentage Added On – Purchase a voucher (e.g. £50) and receive a percentage bonus (e.g. 10% → voucher worth £55).",
+    "• Get Amount Off – The customer pays less for a voucher (e.g. buy £50 voucher for £40).",
+    "• Get Percentage Off – A percentage discount on voucher purchase (e.g. buy £100 voucher for £80 – 20% off).",
+    "• Recipient Gets Additional Voucher – When a voucher is purchased (e.g. £50), the recipient also receives a bonus voucher (e.g. £10) for future use.",
+    "• Sender Gets Additional Voucher – When you buy a voucher for someone else (e.g. £50), you (the sender) receive a bonus voucher (e.g. £10) for yourself.",
+    "You can customise each promotion further by applying specific conditions such as:<br>• Voucher Template – limit to specific voucher types.<br>• Category – apply only to certain voucher categories.<br>• Spend Threshold – set a minimum purchase amount to unlock the promotion.<br>• Time Profile – define start & end dates (ideal for holidays or sales events).<br>• Customer Group – target specific segments (e.g. VIPs or members)."
+  ]
+},
+{
+  "questions": [
+    "how do i log a call",
+    "how do i contact rst support",
+    "how do i raise a support ticket",
+    "how do i open a case",
+    "log a support call",
+    "report an issue to rst",
+    "submit a support request"
+  ],
+  "answers": [
+    "🧾 <strong>How to Log a Call with RST Support</strong><br><br>There are several ways to log a support request — every method creates a <strong>case number</strong> in our call tracking system so it can be tracked until resolved.<br><br><strong>1️⃣ By Email</strong><br>Send details of your issue to <a href='mailto:support@rstepos.com'>support@rstepos.com</a>.<br>Include your site name, contact details, and a brief description of the issue.<br><em>Emails are logged automatically and assigned a case number.</em><br><br><strong>2️⃣ By Phone (Business Hours)</strong><br>📞 <strong>028 7186 5610</strong><br><em>Available Monday–Friday, 9 am – 5 pm</em><br>Speak directly with a Support Specialist — your call will be logged in our system and a case number provided.<br><br><strong>3️⃣ By Phone (Afterhours)</strong><br>🌙 <strong>028 7186 0361</strong><br><em>Available 5 pm–9 pm weekdays, 9 am–9 pm weekends &amp; holidays</em><br>⚠️ For <strong>urgent issues only</strong> such as system or payment failures.<br><br><strong>4️⃣ From Tapa Office (Back Office Portal)</strong><br>Log directly through your back office:<br>• Go to <strong>Tapa Office → Help → Contact Support</strong><br>• Enter your message and attach any screenshots or error details<br>• Click <strong>Submit</strong> — this automatically creates a case in our system<br><br>📌 Once your call is logged, you’ll receive a <strong>case number</strong> by email which can be used to track updates or request escalation."
+  ]
+}
+]

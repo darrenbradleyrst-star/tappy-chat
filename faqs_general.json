@@ -1,0 +1,626 @@
+[
+  {
+    "questions": [
+      "Does RST EPOS work for both hospitality and retail?",
+      "Can RST EPOS handle restaurants as well as shops?",
+      "Is the same system used for bars and retail outlets?",
+      "Will it work in both a café and a retail store?",
+      "Is RST EPOS flexible enough for food and retail businesses?"
+    ],
+    "answers": [
+      "Yes — you can configure workflows for bars, restaurants, cafés or retail. The same platform adapts easily between service types.",
+      "Absolutely. RST EPOS supports both hospitality and retail, letting you switch layouts and menus by location.",
+      "Yes — it’s designed for mixed environments where food, drink, and merchandise are all sold.",
+      "Definitely — just choose hospitality or retail mode per site; everything reports together in Tapa Office.",
+      "RST EPOS was built for flexibility — bars, cafés, shops and more can all use the same connected system."
+    ]
+  },
+  {
+    "questions": [
+      "Are card payments integrated?",
+      "Does RST EPOS link directly to card terminals?",
+      "Can I take integrated card payments?",
+      "Does it connect to my payment machine?",
+      "Do you offer tap-to-pay or Chip &amp; PIN integration?"
+    ],
+    "answers": [
+      "Yes — TapaPay integration sends the bill straight to the reader, reducing errors and speeding up checkout.",
+      "You can process contactless, Apple Pay and Google Pay automatically through connected TapaPay terminals.",
+      "Definitely — with TapaPay, the amount appears instantly on the terminal so staff never re-key totals.",
+      "Integrated payments are built-in; they’re fast, accurate and fully linked to your EPOS reports.",
+      "Yes — RST EPOS supports TapaPay and other approved terminals for seamless, secure payments."
+    ]
+  },
+  {
+    "questions": [
+      "Can I manage multiple locations?",
+      "Does Tapa Office show all my sites together?",
+      "Can I control menus and prices across branches?",
+      "How does RST EPOS handle multi-site management?",
+      "Is there central reporting for several venues?"
+    ],
+    "answers": [
+      "Yes — Tapa Office provides centralised menus, pricing and dashboards across all your sites.",
+      "Multi-site is built-in; you can compare sales, stock and staff performance at a glance.",
+      "Absolutely — update one master menu and push it to every branch instantly.",
+      "Yes — managers see live KPIs by venue while head office can view everything together.",
+      "Tapa Office was designed for chains — set price zones, schedule reports and control stock centrally."
+    ]
+  },
+  {
+    "questions": [
+      "What about stock control?",
+      "Does it track stock automatically?",
+      "Can I manage deliveries and wastage?",
+      "Is there full stock control in Tapa Office?",
+      "How does it handle ingredients and recipes?"
+    ],
+    "answers": [
+      "Yes — you can enable Stock Control to record deliveries, wastage and usage in real time.",
+      "Tapa Office keeps live counts as sales happen, adjusting stock and cost of goods instantly.",
+      "Absolutely — log deliveries, returns and waste so margins stay accurate across sites.",
+      "Stock Control gives you reorder alerts, supplier tracking and recipe costing all in one place.",
+      "It connects directly with TapaPOS so sold items automatically reduce ingredient quantities."
+    ]
+  },
+  {
+    "questions": [
+      "What about kitchen printing and screens?",
+      "Do orders go straight to the kitchen?",
+      "Can I use a Kitchen Display Screen (KDS)?",
+      "Does it replace paper dockets?",
+      "How do chefs see the orders?"
+    ],
+    "answers": [
+      "Orders print or appear on KDS screens instantly, keeping prep fast and accurate.",
+      "You can route courses to specific printers or kitchen stations automatically.",
+      "Yes — Tapa KDS shows dishes, modifiers and timers in real time.",
+      "It removes handwritten dockets — reducing mistakes and saving paper.",
+      "Chefs view live orders with colour-coded status so nothing gets missed during service."
+    ]
+  },
+  {
+    "questions": [
+      "Does it work offline?",
+      "Will EPOS keep working without internet?",
+      "What happens if Wi-Fi drops?",
+      "Can I still take orders when offline?",
+      "Is offline mode supported?"
+    ],
+    "answers": [
+      "Yes — core EPOS continues offline and syncs automatically when the connection returns.",
+      "Transactions are stored locally so you can keep serving even if Wi-Fi goes down.",
+      "Absolutely — sales post back to Tapa Office once you’re online again.",
+      "You’ll stay operational; only cloud reports and some card payments wait until reconnect.",
+      "Offline resilience is built-in so downtime never stops your service."
+    ]
+  },
+  {
+    "questions": [
+      "How long does setup take?",
+      "What’s the usual installation time?",
+      "How quickly can I go live?",
+      "Is setup complicated?",
+      "How soon could the system be running?"
+    ],
+    "answers": [
+      "Most sites go live within days — we import menus, link printers and train staff quickly.",
+      "Setup is fast — once hardware’s ready, configuration and training take minimal time.",
+      "We tailor each rollout, but single-site installs are often complete within a week.",
+      "It’s straightforward — we handle data import, menu build and on-site support.",
+      "Quick turnaround is standard — you’ll be taking orders shortly after training."
+    ]
+  },
+  {
+    "questions": [
+      "How much does it cost?",
+      "What’s the monthly price?",
+      "How expensive is RST EPOS?",
+      "Is there a subscription fee?",
+      "Can you give me an idea of pricing?"
+    ],
+    "answers": [
+      "RST EPOS and TapaPOS start from low monthly costs including software, support and updates.",
+      "Pricing is transparent — we provide a tailored quote based on outlets and modules.",
+      "You’ll find running costs affordable with no hidden fees or surprise add-ons.",
+      "Most customers prefer the simple monthly plan covering everything you need.",
+      "Contact our team for a clear, no-obligation quote that fits your setup."
+    ]
+  },
+  {
+    "questions": [
+      "What is EPOS and how is it different from a till?",
+      "What exactly does EPOS mean?",
+      "How does EPOS work compared to a cash register?",
+      "What makes RST EPOS better than a standard till?",
+      "Can you explain what an EPOS system does?"
+    ],
+    "answers": [
+      "EPOS (Electronic Point of Sale) combines checkout, reporting and payments in one connected system.",
+      "Unlike a traditional till, it links front-of-house, kitchen and back office in real time.",
+      "It records sales, updates stock and sends live reports to Tapa Office instantly.",
+      "EPOS makes management easier with integrated payments and cloud insights.",
+      "Think of it as a smart till that helps you sell faster and see performance instantly."
+    ]
+  },
+  {
+    "questions": [
+      "Do you offer integrated card payments?",
+      "Is TapaPay included?",
+      "Can I connect my card reader?",
+      "How do payments work?",
+      "Are transactions automatic from the till?"
+    ],
+    "answers": [
+      "Yes — TapaPay links directly with your EPOS for seamless Chip &amp; PIN and contactless payments.",
+      "Bills send straight to the reader — no manual entry or keying mistakes.",
+      "You can also link supported third-party acquirers if you already have a provider.",
+      "Integrated payments speed up checkout and reduce reconciliation errors.",
+      "Every sale is logged automatically so totals always match between EPOS and terminal."
+    ]
+  },
+  {
+    "questions": [
+      "What hardware do I need?",
+      "What equipment comes with the system?",
+      "Do I need special hardware?",
+      "Which devices are required to run RST EPOS?",
+      "What’s in a typical setup?"
+    ],
+    "answers": [
+      "A touchscreen EPOS terminal, receipt printer, cash drawer and card reader form the core setup.",
+      "Most venues start with one till and expand with handhelds or kitchen screens as they grow.",
+      "Hardware is flexible — we supply reliable, hospitality-grade devices built to last.",
+      "You can add extras like barcode scanners or label printers for retail use.",
+      "Everything arrives pre-configured so you can plug in and start trading quickly."
+    ]
+  },
+  {
+    "questions": [
+      "Can I keep my existing card provider?",
+      "Do I have to switch payment provider?",
+      "Can I continue using my current terminal?",
+      "Will my existing acquirer still work?",
+      "Do you support multiple card providers?"
+    ],
+    "answers": [
+      "Often yes — we integrate with several acquirers so you can keep your current provider.",
+      "If TapaPay can lower your fees, we’ll show you side-by-side pricing to compare.",
+      "We’ll check compatibility and help migrate transactions smoothly.",
+      "Many customers mix TapaPay and existing terminals during transition.",
+      "You’re free to choose — we’ll connect whichever option suits best."
+    ]
+  },
+  {
+    "questions": [
+      "Do you integrate with hotel PMS and reservations?",
+      "Can RST EPOS link with my hotel system?",
+      "Does it work with Protel or Guestline?",
+      "Can it post restaurant bills to room accounts?",
+      "Is ResDiary integration available?"
+    ],
+    "answers": [
+      "Yes — RST EPOS integrates with leading PMS like Protel, Guestline and MEWS.",
+      "Restaurant and bar charges can post directly to guest rooms for seamless billing.",
+      "Reservations and POS data sync automatically reducing manual entry.",
+      "We also connect to ResDiary and OpenTable for real-time bookings.",
+      "Ask us about your current stack — we likely already support it."
+    ]
+  },
+  {
+    "questions": [
+      "What onboarding and support do you provide?",
+      "Do you train our staff?",
+      "Is there support after installation?",
+      "Who helps if something goes wrong?",
+      "Do you offer UK-based assistance?"
+    ],
+    "answers": [
+      "We handle menu build, staff training and go-live support for a smooth rollout.",
+      "Ongoing UK support is available 7 days a week with remote diagnostics.",
+      "You’ll always speak to a real technician familiar with your setup.",
+      "We also offer optional on-site visits for hardware or network help.",
+      "Our onboarding covers everything from installation to first-day trading."
+    ]
+  },
+  {
+    "questions": [
+      "Can TapaPOS handle both hospitality and retail?",
+      "Is TapaPOS suitable for cafés and shops?",
+      "Does TapaPOS work in restaurants and stores?",
+      "Can I use TapaPOS for bar service and retail sales?",
+      "Will TapaPOS adapt between food and retail modes?"
+    ],
+    "answers": [
+      "Yes — TapaPOS lets you switch between hospitality and retail workflows instantly.",
+      "It’s flexible enough for bars, cafés and retail counters all on the same system.",
+      "You can mix menus, SKUs and layouts per site while keeping reports unified.",
+      "Hospitality or retail — TapaPOS adjusts screens, dockets and pricing automatically.",
+      "The same platform runs both styles of service, simplifying training and reporting."
+    ]
+  },
+  {
+    "questions": [
+      "Do I get cloud reporting?",
+      "Are reports available online?",
+      "Can managers see sales remotely?",
+      "Does TapaPOS sync with Tapa Office for reporting?",
+      "Can I view dashboards on my phone?"
+    ],
+    "answers": [
+      "Yes — Tapa Office provides live cloud dashboards and email reports.",
+      "Managers can log in anywhere to view sales, stock and performance.",
+      "Real-time totals sync across all sites so you always know what’s happening.",
+      "Dashboards update automatically — no waiting for end-of-day uploads.",
+      "You can view key metrics from mobile, tablet or laptop anytime."
+    ]
+  },
+  {
+    "questions": [
+      "How will RST EPOS speed up service at the bar?",
+      "Will it make serving drinks faster?",
+      "How does it help reduce queues?",
+      "What makes RST EPOS quick for bartenders?",
+      "Can it handle peak rush efficiently?"
+    ],
+    "answers": [
+      "Fast screens and quick keys keep transactions moving during busy hours.",
+      "Clear layouts and automatic pricing help staff process orders in seconds.",
+      "It reduces button presses so queues move faster and errors drop.",
+      "Preset tabs and split payments make service smoother at the counter.",
+      "Bars see shorter wait times and faster rounds thanks to streamlined screens."
+    ]
+  },
+  {
+    "questions": [
+      "How do integrated payments work with Chip & PIN?",
+      "Does it support contactless and Apple Pay?",
+      "How are payments sent from EPOS to the terminal?",
+      "Do I have to type the amount on the card reader?",
+      "Can tips and refunds be managed through EPOS?"
+    ],
+    "answers": [
+      "The bill is sent automatically to the card reader — no re-keying needed.",
+      "TapaPay handles Chip & PIN, contactless, Apple Pay and Google Pay seamlessly.",
+      "Payments are linked to each order for accurate reconciliation.",
+      "Staff simply press pay and the terminal shows the correct total instantly.",
+      "Tips, refunds and split bills are all controlled directly from EPOS."
+    ]
+  },
+  {
+    "questions": [
+      "What controls help prevent misuse and mistakes?",
+      "Can managers restrict voids and discounts?",
+      "How secure is the system for staff logins?",
+      "Does it track who performs each action?",
+      "Are there permissions for refunds and price edits?"
+    ],
+    "answers": [
+      "Yes — permissions and staff PINs keep sensitive functions secure.",
+      "Manager approvals are required for voids, refunds or discounts if enabled.",
+      "Every action is logged with user, time and terminal for full audit trail.",
+      "You can set different access levels by role or department.",
+      "Security features protect profits and reduce costly input errors."
+    ]
+  },
+  {
+    "questions": [
+      "Can I see sales and KPIs when I’m off-site?",
+      "Will I get performance emails?",
+      "Is there a mobile dashboard?",
+      "How do I check daily figures remotely?",
+      "Can head office monitor live KPIs?"
+    ],
+    "answers": [
+      "Yes — cloud dashboards show live sales, staff and category performance.",
+      "Daily KPI emails summarise each site automatically.",
+      "Tapa Office works from any browser so you can monitor results on the go.",
+      "You’ll see sales totals and trends even when away from the venue.",
+      "Head office has real-time oversight across every location."
+    ]
+  },
+  {
+    "questions": [
+      "How does stock control reduce wastage and shrinkage?",
+      "Will it help me cut food waste?",
+      "Can I see what’s going missing?",
+      "Does the system track variances and losses?",
+      "How does it protect gross profit?"
+    ],
+    "answers": [
+      "Live stock data highlights discrepancies early so you can act fast.",
+      "Wastage and variance reports show where costs are creeping up.",
+      "You’ll spot missing items and over-portioning before it impacts margin.",
+      "Stock Control records every movement for accountability and accuracy.",
+      "It helps you order smarter and protect GP across all outlets."
+    ]
+  },
+  {
+    "questions": [
+      "What hardware is recommended for a bar?",
+      "What’s the best till setup for pubs?",
+      "Which devices should I use behind the counter?",
+      "Is the hardware durable for wet areas?",
+      "Do you supply waterproof touchscreens?"
+    ],
+    "answers": [
+      "A rugged touchscreen EPOS with printer, cash drawer and Chip & PIN terminal suits most bars.",
+      "We supply waterproof, fanless terminals built for busy hospitality environments.",
+      "Optional kitchen screens and waiter handhelds integrate seamlessly.",
+      "Hardware is designed for reliability — spills and heat aren’t a problem.",
+      "We provide full bundles tested in real bar conditions."
+    ]
+  },
+  {
+    "questions": [
+      "Can you migrate my products and prices from my current system?",
+      "Can you import my menu or item list?",
+      "Do I have to start from scratch?",
+      "Can you copy data from my old EPOS?",
+      "How do you handle existing stock files?"
+    ],
+    "answers": [
+      "Yes — we can import product lists and pricing from spreadsheets or other systems.",
+      "Migration tools speed up setup and preserve your existing structure.",
+      "We’ll map categories and taxes to ensure consistency.",
+      "It’s quick and painless — no need to re-enter everything manually.",
+      "Our onboarding team handles the data so you can focus on service."
+    ]
+  },
+  {
+    "questions": [
+      "How much does it cost and can I keep my card provider?",
+      "Is there flexible pricing?",
+      "Do I need to change my acquirer?",
+      "Can you compare my current rates?",
+      "What’s the cost if I stay with my existing provider?"
+    ],
+    "answers": [
+      "Pricing is tailored to your venue size and modules, with clear monthly or upfront options.",
+      "We’ll quote both hardware and software transparently — no hidden fees.",
+      "You can usually keep your current acquirer; we’ll check compatibility.",
+      "TapaPay quotes are optional and shown side-by-side for easy comparison.",
+      "Contact us for a custom proposal that fits your setup and budget."
+    ]
+  },
+  {
+    "questions": [
+      "What is Stock Control in Tapa Office?",
+      "Can you explain Stock Control?",
+      "What does the Stock Control module do?",
+      "Is Stock Control included in Tapa Office?",
+      "How does Stock Control work with EPOS?"
+    ],
+    "answers": [
+      "Stock Control manages purchases, deliveries, returns, transfers and recipes in one place.",
+      "It keeps costs and stock levels accurate by syncing live with TapaPOS.",
+      "Every sale, void and refund updates inventory instantly.",
+      "You’ll always know what’s on-hand, what’s wasted and what needs re-ordering.",
+      "It’s the complete link between back-office and tills for accurate margins."
+    ]
+  },
+  {
+    "questions": [
+      "How does Stock Control connect to my tills?",
+      "Does it sync automatically with sales?",
+      "Do I need to upload stock manually?",
+      "How are sales reflected in Tapa Office?",
+      "Does each sale deduct ingredients?"
+    ],
+    "answers": [
+      "Tapa Office reads sales data live from TapaPOS and adjusts stock automatically.",
+      "You never re-enter figures — everything syncs instantly across systems.",
+      "Each sale, void or refund changes stock levels and cost of goods in real time.",
+      "Data flows continuously so your reports always reflect true usage.",
+      "The connection is seamless — tills and stock speak the same language."
+    ]
+  },
+  {
+    "questions": [
+      "Can I create purchase orders and receive deliveries?",
+      "Does Stock Control generate supplier orders?",
+      "Can I log deliveries against orders?",
+      "How do I manage supplier pricing?",
+      "Does it flag delivery discrepancies?"
+    ],
+    "answers": [
+      "Yes — create and send purchase orders directly to suppliers, then receive goods against them.",
+      "Deliveries update cost prices automatically and highlight any mismatches.",
+      "Orders can be generated from usage or minimum stock levels.",
+      "It tracks supplier performance and price changes over time.",
+      "Everything is logged with date, time and user for full traceability."
+    ]
+  },
+  {
+    "questions": [
+      "Does it support transfers, returns and waste?",
+      "Can I record stock movements between sites?",
+      "How do I handle supplier returns?",
+      "Can I log waste and adjustments?",
+      "Is there a full audit trail for stock actions?"
+    ],
+    "answers": [
+      "Yes — you can record transfers, returns and waste directly in Tapa Office.",
+      "All stock movements are logged with user, date and reason codes.",
+      "Supplier returns and internal transfers update counts automatically.",
+      "Waste entries ensure your GP and usage reports stay accurate.",
+      "Every adjustment is tracked for complete accountability."
+    ]
+  },
+  {
+    "questions": [
+      "How do stock takes work — can I use a handheld?",
+      "Can I count stock with a mobile device?",
+      "Are partial stock takes supported?",
+      "Does it show expected vs actual variance?",
+      "Can I import counts from a scanner?"
+    ],
+    "answers": [
+      "Yes — full or partial stock takes can be done by area, category or item.",
+      "Use handheld scanners or mobile forms to speed up counting.",
+      "Variance reports compare expected to actual counts instantly.",
+      "Spot checks and period reconciliations are built in.",
+      "Handheld entry helps minimise manual input and errors."
+    ]
+  },
+  {
+    "questions": [
+      "Can I link recipes to products for automatic depletions?",
+      "Does it track ingredients automatically?",
+      "How do recipes affect stock levels?",
+      "Will stock reduce when a menu item sells?",
+      "Can I maintain accurate GP with recipes?"
+    ],
+    "answers": [
+      "Yes — link ingredients to menu items so stock reduces automatically when sold.",
+      "Recipes keep usage accurate and highlight cost changes instantly.",
+      "Tapa Office deducts ingredients with every sale for precise margins.",
+      "You’ll always see live recipe costs and potential GP per item.",
+      "Automatic depletion ensures consistent and reliable costing."
+    ]
+  },
+  {
+    "questions": [
+      "What reports are available for stock and costing?",
+      "Can I run stock valuation and usage reports?",
+      "Does it show gross profit and recipe costing?",
+      "Can reports be exported?",
+      "Can I schedule email reports for managers?"
+    ],
+    "answers": [
+      "Stock valuation, usage, GP and variance reports are all included.",
+      "You can export to CSV, XLS or PDF and share instantly.",
+      "Recipe costing reports update as ingredient prices change.",
+      "Managers can receive scheduled summaries by email.",
+      "Every report can be filtered by site, supplier or date range."
+    ]
+  },
+  {
+    "questions": [
+      "Can I set reorder points and get alerts?",
+      "Does it warn when stock runs low?",
+      "Can I automate reordering?",
+      "Are reorder levels per site supported?",
+      "Will it suggest supplier orders automatically?"
+    ],
+    "answers": [
+      "Yes — set minimum or par levels and receive smart reorder suggestions.",
+      "Low-stock alerts show when to reorder based on sales velocity.",
+      "Reorder logic considers lead times and usage trends.",
+      "Each site can have its own minimums and preferred suppliers.",
+      "It’s designed to prevent stockouts and over-ordering."
+    ]
+  },
+  {
+    "questions": [
+      "Does Stock Control support multiple sites?",
+      "Can I view stock across all branches?",
+      "Is there inter-site transfer support?",
+      "Can head office manage stock centrally?",
+      "Does it show usage per location?"
+    ],
+    "answers": [
+      "Yes — multi-site is built in with central or local controls.",
+      "You can drill down by site or view totals across all locations.",
+      "Transfers between venues are tracked automatically.",
+      "Head office can manage suppliers, items and pricing globally.",
+      "Usage and GP comparisons make benchmarking simple."
+    ]
+  },
+  {
+    "questions": [
+      "Does it integrate with accounting and procurement systems?",
+      "Can I export data to Xero or Sage?",
+      "Does it link with Procure Wizard?",
+      "Can I automate invoice matching?",
+      "Is accounting integration available?"
+    ],
+    "answers": [
+      "Yes — integrations are available for Xero, Sage and other systems.",
+      "Procure Wizard and MarketMan can connect for purchasing workflows.",
+      "Export purchase data and invoices directly from Tapa Office.",
+      "Supplier reconciliation becomes faster and more accurate.",
+      "Accounting links save time and prevent double entry."
+    ]
+  },
+  {
+    "questions": [
+      "How do user roles and approvals work?",
+      "Can I restrict who can adjust stock?",
+      "Are approvals required for sensitive actions?",
+      "Does it keep an audit log of changes?",
+      "Can different staff have different access levels?"
+    ],
+    "answers": [
+      "Roles define who can order, receive or adjust stock.",
+      "Optional approvals ensure changes are reviewed before applying.",
+      "Every edit is timestamped and logged for compliance.",
+      "Managers can override or approve adjustments remotely.",
+      "Granular access control maintains security and accountability."
+    ]
+  },
+  {
+    "questions": [
+      "What formats and devices are supported?",
+      "Can I run Tapa Office on a tablet?",
+      "Does it work on mobile?",
+      "Which file formats can I export?",
+      "Is any special software required?"
+    ],
+    "answers": [
+      "Tapa Office runs in any modern browser on desktop, tablet or phone.",
+      "No install required — just log in and go.",
+      "You can export data in CSV, XLS or PDF formats.",
+      "It’s responsive, so all reports fit any screen size.",
+      "Cross-platform support means flexibility for every user."
+    ]
+  },
+  {
+    "questions": [
+      "How quickly can we get started?",
+      "What’s the onboarding process?",
+      "Can you import my existing data?",
+      "How soon will Stock Control be live?",
+      "Do you provide setup assistance?"
+    ],
+    "answers": [
+      "We can activate Stock Control remotely after a short setup session.",
+      "Suppliers, items and recipes are imported to get you live quickly.",
+      "Most sites are ready within a few days after initial training.",
+      "Setup includes guided configuration and your first stock take.",
+      "Our support team handles everything for a smooth start."
+    ]
+  },
+  {
+    "questions": [
+      "What price is it?",
+      "How much will it cost me monthly?",
+      "Can you give me a price idea?",
+      "What’s the subscription cost?",
+      "Is pricing affordable?"
+    ],
+    "answers": [
+      "Good question! RST EPOS offers low monthly costs covering software, updates and support.",
+      "Most setups use simple transparent monthly pricing with no hidden extras.",
+      "Costs depend on your outlet size and modules — contact us for a tailored quote.",
+      "Our plans are budget-friendly and scale with your business.",
+      "We’ll always give a clear, itemised price so you know exactly what you’re paying."
+    ]
+  },
+  {
+    "questions": [
+      "Do you provide support and training?",
+      "Who do I contact for help?",
+      "Is there ongoing support?",
+      "Do you offer 7-day technical assistance?",
+      "Will staff get trained before go-live?"
+    ],
+    "answers": [
+      "Yes — we handle installation, training and 7-day support throughout.",
+      "Our UK-based team provides phone and remote help whenever needed.",
+      "Training covers menus, payments and reports so staff feel confident.",
+      "We stay available long after go-live for any questions or tweaks.",
+      "Support is part of your plan — no separate contracts required."
+    ]
+  }
+]

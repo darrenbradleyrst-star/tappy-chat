@@ -1,0 +1,46 @@
+{"time":"2025-11-02T22:52:55.270Z","source":"OpenAI","message":"display not working"}
+{"time":"2025-11-02T22:53:17.224Z","source":"FAQ","message":"no"}
+{"time":"2025-11-02T22:57:42.073Z","source":"OpenAI","message":"printer isn't working"}
+{"time":"2025-11-02T23:00:58.046Z","source":"Cache","message":"printer isn't working"}
+{"time":"2025-11-02T23:05:36.216Z","source":"Cache","message":"printer isn't working"}
+{"time":"2025-11-02T23:06:00.268Z","source":"FAQs","message":"printer not printing"}
+{"time":"2025-11-02T23:08:30.290Z","source":"FAQs","message":"printer not working"}
+{"time":"2025-11-02T23:10:09.397Z","source":"Cache","message":"printer not working"}
+{"time":"2025-11-02T23:11:12.663Z","source":"OpenAI","message":"printer not printing"}
+{"time":"2025-11-02T23:11:56.079Z","source":"OpenAI","message":"print not powering on"}
+{"time":"2025-11-02T23:13:02.950Z","source":"FAQs","message":"printer not printing"}
+{"time":"2025-11-02T23:13:13.942Z","source":"FAQs","message":"printer not printing"}
+{"time":"2025-11-02T23:15:58.046Z","source":"FAQs","message":"printer no power"}
+{"time":"2025-11-02T23:16:24.697Z","source":"FAQs","message":"printer not printing"}
+{"time":"2025-11-02T23:18:01.558Z","source":"FAQs","message":"no power ro printer"}
+{"time":"2025-11-02T23:18:18.065Z","source":"OpenAI","message":"no power to screen"}
+{"time":"2025-11-02T23:20:41.058Z","source":"Cache","message":"no power to screen"}
+{"time":"2025-11-02T23:21:42.965Z","source":"Cache","message":"no power to screen"}
+{"time":"2025-11-02T23:21:52.971Z","source":"OpenAI","message":"yes"}
+{"time":"2025-11-02T23:22:17.954Z","source":"OpenAI","message":"who are rstepos"}
+{"time":"2025-11-02T23:22:57.387Z","source":"OpenAI","message":"how long have they been in business"}
+{"time":"2025-11-02T23:23:08.699Z","source":"Cache","message":"who are the directors"}
+{"time":"2025-11-02T23:23:32.653Z","source":"OpenAI","message":"what do they do"}
+{"time":"2025-11-02T23:26:00.198Z","source":"Cache","message":"what do steps do"}
+{"time":"2025-11-02T23:27:39.608Z","source":"Cache","message":"who are rstepos"}
+{"time":"2025-11-02T23:28:55.819Z","source":"Cache","message":"who are rstepos"}
+{"time":"2025-11-02T23:29:05.071Z","source":"Cache","message":"what do they do"}
+{"time":"2025-11-02T23:30:36.505Z","source":"Cache","message":"what do they do"}
+{"time":"2025-11-02T23:31:26.203Z","source":"Cache","message":"what do they do"}
+{"time":"2025-11-02T23:31:44.980Z","source":"Cache","message":"what do rstepos do"}
+{"time":"2025-11-02T23:33:24.164Z","source":"OpenAI","message":"what do rstepos do"}
+{"time":"2025-11-02T23:33:41.852Z","source":"OpenAI","message":"who are rstepos"}
+{"time":"2025-11-02T23:33:57.808Z","source":"OpenAI","message":"where can I contact them"}
+{"time":"2025-11-02T23:35:10.339Z","source":"FAQs","message":"my printer isn't printing"}
+{"time":"2025-11-02T23:35:48.648Z","source":"OpenAI","message":"my email didn't arrive"}
+{"time":"2025-11-02T23:36:14.950Z","source":"FAQs","message":"my voucher didn't arrive"}
+{"time":"2025-11-02T23:36:57.103Z","source":"OpenAI","message":"what is iwantfed"}
+{"time":"2025-11-02T23:37:36.855Z","source":"Cache","message":"how much commission is iwantfed"}
+{"time":"2025-11-02T23:38:04.116Z","source":"OpenAI","message":"can I switch off iwantfed store"}
+{"time":"2025-11-02T23:38:31.285Z","source":"OpenAI","message":"I want a price"}
+{"time":"2025-11-02T23:38:48.396Z","source":"Cache","message":"I want a quote"}
+{"time":"2025-11-02T23:44:12.730Z","source":"FAQs","message":"fix my printer"}
+{"time":"2025-11-02T23:45:08.437Z","source":"Cache","message":"finger not reading in vein reader"}
+{"time":"2025-11-02T23:48:39.034Z","source":"FAQs","message":"finger vein reader not powering on"}
+{"time":"2025-11-02T23:48:55.373Z","source":"Cache","message":"finger not reading"}
+{"time":"2025-11-02T23:50:25.969Z","source":"Cache","message":"finger not reading"}
