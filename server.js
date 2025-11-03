@@ -1,8 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v12.1 ("Tappy Brain")
+// RST EPOS Smart Chatbot API v12.1.3 ("Tappy Brain")
 // ✅ Render-ready version (no 'window' reference)
 // ✅ Uses process.env.PORT for hosting
-// ✅ Adds root route + /test route to confirm POST works
+// ✅ Adds version tag + /test route to confirm POST works
 // =========================================
 
 import express from "express";
@@ -46,17 +46,17 @@ app.use(
 app.use(rateLimit({ windowMs: 60 * 1000, max: 40 }));
 
 // ------------------------------------------------------
-// ✅ Root route for Render test
+// ✅ Root route for Render test (version-tagged)
 // ------------------------------------------------------
 app.get("/", (req, res) => {
-  res.send("✅ Tappy Chatbot API is running on Render!");
+  res.send("✅ Tappy Chatbot API v12.1.3 is running on Render! (with /test route)");
 });
 
 // ------------------------------------------------------
 // ✅ Test POST endpoint to confirm API connection
 // ------------------------------------------------------
 app.post("/test", (req, res) => {
-  console.log("✅ /test endpoint hit");
+  console.log("✅ /test endpoint hit from:", req.ip);
   res.json({ ok: true, msg: "Tappy test endpoint working on Render!" });
 });
 
@@ -78,7 +78,7 @@ function formatReplyText(text) {
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
-// 💬 Chat route (keep your existing logic)
+// 💬 Chat route (minimal echo for testing)
 // ------------------------------------------------------
 const sessions = {};
 app.post("/api/chat", async (req, res) => {
@@ -90,7 +90,6 @@ app.post("/api/chat", async (req, res) => {
   const lower = message.toLowerCase().trim();
 
   try {
-    // Existing chatbot logic continues here...
     res.json({ reply: `Echo test: ${message}` }); // temporary minimal reply for testing
   } catch (err) {
     console.error("❌ Chat error:", err);
@@ -102,5 +101,5 @@ app.post("/api/chat", async (req, res) => {
 // 🚀 Start server
 // ------------------------------------------------------
 app.listen(PORT, () => {
-  console.log(`🚀 Tappy Brain v12.1 running on port ${PORT}`);
+  console.log(`🚀 Tappy Brain v12.1.3 running on port ${PORT}`);
 });
