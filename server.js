@@ -6,7 +6,7 @@
 // ✅ Working Yes/No + Start New Question / End Chat
 // ✅ Cleans 404 text before OpenAI context
 // ✅ Fixes false sales trigger on support queries
-// ✅ Render-ready version (dynamic PORT + / route)
+// ✅ Render-ready version (dynamic PORT +/ route)
 // =========================================
 
 import express from "express";
