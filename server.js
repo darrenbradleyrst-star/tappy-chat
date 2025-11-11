@@ -1,10 +1,10 @@
 // =========================================
-// RST EPOS Smart Chatbot API v13.0
+// RST EPOS Smart Chatbot API v13.3
 // "Tappy Brain + Hybrid Context Router + Lead Capture"
-// ✅  General mode now auto-checks Sales and Support flows
-// ✅  Sales mode: HTML page search + pricing intents + lead capture
-// ✅  Support mode: multi-match FAQ links + inline answers
-// ✅  Unified session and logging structure
+// ✅ General mode auto-checks Sales + Support
+// ✅ Sales mode: HTML search + pricing intents + lead capture
+// ✅ Support mode: multi-match FAQ links + inline answers
+// ✅ Properly closed braces (Render-safe)
 // =========================================
 
 import express from "express";
@@ -25,7 +25,7 @@ const app = express();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ------------------------------------------------------
-// 📁  Paths + Cache Setup
+// 📁 Paths + Cache Setup
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +34,7 @@ const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐  Express / CORS / Rate Limit
+// 🌐 Express / CORS / Rate Limit
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
@@ -67,14 +67,14 @@ app.use(
 );
 
 // ------------------------------------------------------
-// 🧾  Utilities
+// 🧾 Utilities
 // ------------------------------------------------------
 const logJSON = (file, data) =>
   fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
-// 📚  Load Support FAQs
+// 📚 Load Support FAQs
 // ------------------------------------------------------
 const faqsSupportPath = path.join(__dirname, "faqs_support.json");
 let faqsSupport = [];
@@ -87,7 +87,7 @@ try {
 }
 
 // ------------------------------------------------------
-// 🔍  Sitemap + Page Fetch
+// 🔍 Sitemap + Page Fetch
 // ------------------------------------------------------
 async function getSitemapUrls(sitemapUrl = "https://www.rstepos.com/sitemap.xml") {
   try {
@@ -122,7 +122,7 @@ async function fetchSiteText(url) {
 }
 
 // ------------------------------------------------------
-// 💬  Chat Route (Sales + Support + General)
+// 💬 Chat Route (Sales + Support + General)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -139,85 +139,103 @@ app.post("/api/chat", async (req, res) => {
   const lower = message.toLowerCase().trim();
 
   try {
-    // Common exits
     if (["restart", "new question"].includes(lower))
       return res.json({ reply: "✅ No problem — please type your new question below." });
     if (["end", "exit", "close"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
-   // --------------------------
-// SALES MODE (v13.3 — fixed price → name flow)
-// --------------------------
-if (context === "sales") {
-  // Handle active lead capture sequence first
-  if (s.step && s.step !== "none") {
-    const reply = continueLeadCapture(s, message);
-    if (reply.complete) {
-      logJSON(salesLeadsPath, s.lead);
-      s.step = "none";
-      s.awaitingPriceConfirm = false;
-      s.stepStarted = false;
+    // --------------------------
+    // SALES MODE
+    // --------------------------
+    if (context === "sales") {
+      if (s.step && s.step !== "none") {
+        const reply = continueLeadCapture(s, message);
+        if (reply.complete) {
+          logJSON(salesLeadsPath, s.lead);
+          s.step = "none";
+          s.awaitingPriceConfirm = false;
+          s.stepStarted = false;
+          return res.json({
+            reply:
+              "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
+          });
+        }
+        return res.json({ reply: reply.text });
+      }
+
+      const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
+      if (priceIntent && !s.awaitingPriceConfirm && !s.stepStarted) {
+        s.awaitingPriceConfirm = true;
+        return res.json({
+          reply:
+            "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
+        });
+      }
+
+      if (s.awaitingPriceConfirm && /^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)$/i.test(lower)) {
+        s.awaitingPriceConfirm = false;
+        s.stepStarted = true;
+        s.step = "name";
+        s.lead = {};
+        return res.json({
+          reply: "🙂 Great! What’s your *name*, please?",
+        });
+      }
+
+      if (s.awaitingPriceConfirm && /^(no|not now|later|maybe|n|nah)$/i.test(lower)) {
+        s.awaitingPriceConfirm = false;
+        return res.json({
+          reply:
+            "👍 No problem — you can also check our <a href='/products.html'>Products</a> pages for more details, or ask me about a specific feature.",
+        });
+      }
+
+      if (s.awaitingPriceConfirm) {
+        return res.json({
+          reply:
+            "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
+        });
+      }
+
+      const reply = await handleSalesAgent(message, s);
+      return res.json({ reply });
+    }
+
+    // --------------------------
+    // SUPPORT MODE
+    // --------------------------
+    if (context === "support") {
+      const reply = await handleSupportAgent(message);
+      return res.json({ reply });
+    }
+
+    // --------------------------
+    // GENERAL MODE (Hybrid Router)
+    // --------------------------
+    if (context === "general") {
+      const salesResult = await quickSalesLookup(message);
+      if (salesResult) return res.json({ reply: salesResult });
+
+      const supportResult = await quickSupportLookup(message);
+      if (supportResult) return res.json({ reply: supportResult });
+
       return res.json({
         reply:
-          "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
+          "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
       });
     }
-    return res.json({ reply: reply.text });
+  } catch (err) {
+    console.error("❌ Chat error:", err);
+    res.status(500).json({ error: "Chat service unavailable" });
   }
-
-  // 🏷️ Price / quote / subscription intent
-  const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
-
-  // Step 1 — First mention of price
-  if (priceIntent && !s.awaitingPriceConfirm && !s.stepStarted) {
-    s.awaitingPriceConfirm = true;
-    return res.json({
-      reply:
-        "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
-    });
-  }
-
-  // Step 2 — Confirm “yes”
-  if (s.awaitingPriceConfirm && /^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)$/i.test(lower)) {
-    s.awaitingPriceConfirm = false;
-    s.stepStarted = true;
-    s.step = "name";
-    s.lead = {};
-    return res.json({
-      reply: "🙂 Great! What’s your *name*, please?",
-    });
-  }
-
-  // Step 3 — Decline “no”
-  if (s.awaitingPriceConfirm && /^(no|not now|later|maybe|n|nah)$/i.test(lower)) {
-    s.awaitingPriceConfirm = false;
-    return res.json({
-      reply:
-        "👍 No problem — you can also check our <a href='/products.html'>Products</a> pages for more details, or ask me about a specific feature.",
-    });
-  }
-
-  // Step 4 — Still waiting for yes/no
-  if (s.awaitingPriceConfirm) {
-    return res.json({
-      reply:
-        "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
-    });
-  }
-
-  // Normal sales lookups (non-pricing queries)
-  const reply = await handleSalesAgent(message, s);
-  return res.json({ reply });
-}
+}); // ✅ properly closes chat route
 
 // ------------------------------------------------------
 // 🧠 Support Search + Interactive Selection
 // ------------------------------------------------------
 async function handleSupportAgent(message) {
-  const s = sessions[Object.keys(sessions)[0]]; // basic per-IP session reference
+  const s = sessions[Object.keys(sessions)[0]];
   const matches = findSupportMatches(message);
-
-  // 🧩 If user previously chose an article number
   if (s.awaitingFaqChoice && /^\d+$/.test(message.trim())) {
     const idx = parseInt(message.trim(), 10) - 1;
     const list = s.lastFaqList || [];
@@ -232,8 +250,6 @@ async function handleSupportAgent(message) {
       );
     }
   }
-
-  // 🎯 One clear match → show steps
   if (matches.length === 1) {
     s.awaitingFaqChoice = false;
     return (
@@ -242,8 +258,6 @@ async function handleSupportAgent(message) {
       "<br><br>Did that resolve your issue?"
     );
   }
-
-  // 📋 Multiple possible matches → show numbered list
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
@@ -254,18 +268,13 @@ async function handleSupportAgent(message) {
       "<br><br>Please reply with the number of the article you'd like to view."
     );
   }
-
-  // ❌ No matches
   return "🤔 I’m not sure about that one — can you describe the issue in more detail?";
 }
 
 async function quickSupportLookup(message) {
   const s = sessions[Object.keys(sessions)[0]];
   const matches = findSupportMatches(message);
-
   if (!matches.length) return null;
-
-  // Single match: show steps
   if (matches.length === 1) {
     return (
       `🧩 This might help:<br><strong>${matches[0].title}</strong><br>` +
@@ -273,8 +282,6 @@ async function quickSupportLookup(message) {
       "<br><br>Did that fix it?"
     );
   }
-
-  // Multiple matches: show as numbered list (not links)
   s.awaitingFaqChoice = true;
   s.lastFaqList = matches;
   const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
@@ -316,12 +323,10 @@ async function handleSalesAgent(message) {
     scores.sort((a, b) => b.matches - a.matches);
     if (!scores.length)
       return "💬 I can help you find the right solution — tell me your business type (e.g. café, bar, retail).";
-
     if (scores.length === 1) {
       const title = path.basename(scores[0].url).replace(/[-_]/g, " ").replace(".html", "");
       return `🔎 I think you mean our <a href='${scores[0].url}' target='_blank'>${title}</a> page.`;
     }
-
     const links = scores
       .slice(0, 5)
       .map(
@@ -348,12 +353,12 @@ async function quickSalesLookup(message) {
 }
 
 // ------------------------------------------------------
-// 🌐 Root + Health Check Endpoint
+// 🌐 Root + Health Check
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "13.2",
+    version: "13.3",
     name: "Tappy Brain API",
     message: "Hybrid General Flow (Sales + Support Routing) enabled.",
     time: new Date().toISOString(),
@@ -364,6 +369,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Tappy Brain v13.2 listening on port ${PORT}`);
+  console.log(`🚀 Tappy Brain v13.3 listening on port ${PORT}`);
 });
-
