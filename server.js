@@ -1,8 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v12.5 ("Tappy Brain + Agentic Context + Lead Capture + Follow-up")
-// ✅ Support mode: clickable FAQ links + follow-up question
-// ✅ Sales mode: improved keyword routing (bar, cafe, hotel, members, etc.)
-// ✅ Lead capture (Name → Company → Email → Comments)
+// RST EPOS Smart Chatbot API v12.4 ("Tappy Brain + Agentic Context + Lead Capture")
+// ✅ Support mode: multi-match FAQ links
+// ✅ Sales mode: multi-page sitemap search + lead capture (Name→Company→Email→Comments)
+// ✅ Clean structure, Render-ready
 // =========================================
 
 import express from "express";
@@ -23,7 +23,7 @@ const app = express();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ------------------------------------------------------
-// 📁 Setup
+// 📁 Paths and setup
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,10 +32,11 @@ const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Middleware
+// 🌐 Express / CORS / Rate Limiting Setup
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
+
 app.use(
   cors({
     origin: [
@@ -52,16 +53,26 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
     max: 40,
     message: { error: "Rate limit exceeded — please wait a moment." },
+    standardHeaders: true,
+    legacyHeaders: false,
   })
 );
 
 // ------------------------------------------------------
-// 📚 Load FAQs
+// 🧾 Utilities
+// ------------------------------------------------------
+const logJSON = (file, data) =>
+  fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+// ------------------------------------------------------
+// 📚 Load Support FAQs + Cache
 // ------------------------------------------------------
 const faqsSupportPath = path.join(__dirname, "faqs_support.json");
 let faqsSupport = [];
@@ -74,93 +85,68 @@ try {
 }
 
 // ------------------------------------------------------
-// 🧾 Utility
+// 🔍 Sitemap + Page Fetch
 // ------------------------------------------------------
-const logJSON = (file, data) =>
-  fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+async function getSitemapUrls(sitemapUrl = "https://www.rstepos.com/sitemap.xml") {
+  try {
+    const res = await fetch(sitemapUrl);
+    const xml = await res.text();
+    const parsed = await xml2js.parseStringPromise(xml);
+    if (parsed.urlset?.url)
+      return parsed.urlset.url.map((u) => u.loc?.[0]).filter(Boolean);
+  } catch {}
+  return [];
+}
+
+async function fetchSiteText(url) {
+  const safe = url.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+  const cacheFile = path.join(cacheDir, safe + ".txt");
+  if (fs.existsSync(cacheFile) && Date.now() - fs.statSync(cacheFile).mtimeMs < 86400000)
+    return fs.readFileSync(cacheFile, "utf8");
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return "";
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    $("script,style,nav,footer,header").remove();
+    const text = $("body").text().replace(/\s+/g, " ").trim();
+    if (text.length > 50) {
+      fs.writeFileSync(cacheFile, text);
+      return text;
+    }
+  } catch {}
+  return "";
+}
 
 // ------------------------------------------------------
-// 💬 Chat Route
+// 💬 Chat route (Support + Sales + Lead Capture)
 // ------------------------------------------------------
 const sessions = {};
 
 app.post("/api/chat", async (req, res) => {
   const { message, context, reset } = req.body;
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-
   if (reset) {
-    sessions[ip] = { step: "none", mode: "general", lead: {} };
+    sessions[ip] = { step: "none", module: "General", lead: {} };
     return res.json({ reply: "Session reset OK." });
   }
 
   if (!message) return res.status(400).json({ error: "No message provided" });
-  if (!sessions[ip]) sessions[ip] = { step: "none", mode: context || "general", lead: {} };
+  if (!sessions[ip]) sessions[ip] = { step: "none", module: "General", lead: {} };
   const s = sessions[ip];
   const lower = message.toLowerCase().trim();
 
   try {
-    // ✅ Handle universal commands
-    if (["restart", "new question", "start over"].includes(lower)) {
-      s.step = "none";
+    // Universal resets
+    if (["start new question", "new question", "restart"].includes(lower))
       return res.json({ reply: "✅ No problem — please type your new question below." });
-    }
+    if (["end chat", "close", "exit"].includes(lower))
+      return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
-    // ✅ Support mode follow-up
-    if (s.step === "support_followup") {
-      if (["yes", "yep", "yeah", "sorted"].includes(lower)) {
-        s.step = "none";
-        return res.json({ reply: "✅ Glad to hear that!" });
-      }
-      if (["no", "nope", "not yet", "still broken"].includes(lower)) {
-        s.step = "none";
-        return res.json({
-          reply: "😕 No problem — please describe what’s still not working, and I’ll try to help.",
-        });
-      }
-    }
-
-    // 🟣 Support / General Mode
-    if (context === "support" || context === "general") {
-      const matches = findSupportMatches(message);
-      if (matches.length === 1) {
-        s.step = "support_followup";
-        const url =
-          matches[0].url ||
-          `https://support.rstepos.com/article/${encodeURIComponent(
-            matches[0].title.toLowerCase().replace(/\s+/g, "-")
-          )}`;
-        return res.json({
-          reply: `🔗 I think this article might help:<br><a href="${url}" target="_blank" style="color:#0b79b7;">${matches[0].title}</a><br><br>Did this resolve your issue or is there something else I can help with?`,
-        });
-      }
-
-      if (matches.length > 1) {
-        const links = matches
-          .map(
-            (m) =>
-              `<a href="${
-                m.url ||
-                `https://support.rstepos.com/article/${encodeURIComponent(
-                  m.title.toLowerCase().replace(/\s+/g, "-")
-                )}`
-              }" target="_blank" style="display:block;margin:4px 0;color:#0b79b7;">${m.title}</a>`
-          )
-          .join("");
-        s.step = "support_followup";
-        return res.json({
-          reply: `🔍 I found several articles that might help:<br>${links}<br>Did one of these resolve your issue?`,
-        });
-      }
-
-      return res.json({
-        reply:
-          "🤔 I’m not sure about that one yet — can you describe the issue in more detail? I’ll pass it to support if needed.",
-      });
-    }
-
-    // 🟢 Sales Mode (with lead capture)
+    // SALES MODE
     if (context === "sales") {
+      // Continue lead capture if already in process
       if (s.step && s.step !== "none") {
         const reply = continueLeadCapture(s, message);
         if (reply.complete) {
@@ -174,16 +160,44 @@ app.post("/api/chat", async (req, res) => {
         return res.json({ reply: reply.text });
       }
 
+      // Otherwise, handle normal sales search
       if (lower.includes("price") || lower.includes("quote")) {
         s.step = "name";
         s.lead = {};
         return res.json({
-          reply: "💬 Sure — I can help with a quote. What’s your *name* please?",
+          reply:
+            "💬 Sure — I can help with a quote. What’s your *name* please?",
         });
       }
 
-      const reply = await handleSalesAgent(message);
+      const reply = await handleSalesAgent(message, s);
       return res.json({ reply });
+    }
+
+    // SUPPORT MODE
+    if (context === "support" || context === "general") {
+      const matches = findMultipleSupportFAQs(message);
+      if (matches.length === 1) return res.json({ reply: matches[0].answers.join("<br>") });
+
+      if (matches.length > 1) {
+        const links = matches
+          .map((m, i) => {
+            const title = m.title || m.questions?.[0] || `Article ${i + 1}`;
+            const url =
+              m.url ||
+              `https://support.rstepos.com/article/${encodeURIComponent(
+                title.toLowerCase().replace(/\s+/g, "-")
+              )}`;
+            return `<a href="${url}" target="_blank" style="display:block;margin:4px 0;color:#0b79b7;">${title}</a>`;
+          })
+          .join("");
+        return res.json({ reply: `🔍 I found several articles that might help:<br>${links}` });
+      }
+
+      return res.json({
+        reply:
+          "🤔 I’m not sure about that one yet — can you describe the issue in more detail? I’ll pass it to support if needed.",
+      });
     }
   } catch (err) {
     console.error("❌ Chat error:", err);
@@ -205,8 +219,9 @@ function continueLeadCapture(s, message) {
       s.step = "email";
       return { text: "📧 And what’s the best *email address* to send details to?" };
     case "email":
-      if (!isValidEmail(message))
+      if (!isValidEmail(message)) {
         return { text: "⚠️ That doesn’t look like a valid email — could you re-enter it?" };
+      }
       s.lead.email = message.trim();
       s.step = "comments";
       return { text: "📝 Great — any specific notes or requirements for your quote?" };
@@ -218,9 +233,9 @@ function continueLeadCapture(s, message) {
 }
 
 // ------------------------------------------------------
-// 🧠 Support FAQ Finder
+// 🧠 Support Multi-Match Finder
 // ------------------------------------------------------
-function findSupportMatches(message) {
+function findMultipleSupportFAQs(message) {
   const lower = message.toLowerCase();
   const words = lower.split(/\s+/).filter((w) => w.length > 2);
   const results = [];
@@ -229,56 +244,88 @@ function findSupportMatches(message) {
     if (!entry.questions || !entry.answers) continue;
     const allQ = entry.questions.map((q) => q.toLowerCase());
     const score = allQ.reduce((sum, q) => {
-      const overlap = q.split(/\s+/).filter((w) => words.includes(w)).length;
+      const qWords = q.split(/\s+/);
+      const overlap = qWords.filter((w) => words.includes(w)).length;
       return sum + (overlap > 0 ? 1 : 0);
     }, 0);
-    if (score > 0)
+    if (score > 0) {
       results.push({
         title: entry.title || entry.questions[0],
         url: entry.url || null,
         answers: entry.answers,
       });
+    }
   }
   return results.slice(0, 5);
 }
 
 // ------------------------------------------------------
-// 🛍️ Improved Sales Routing
+// 🛍️ Agentic Sales Assistant (Links instead of buttons)
 // ------------------------------------------------------
-async function handleSalesAgent(message) {
+async function handleSalesAgent(message, s) {
   const lower = message.toLowerCase();
-
-  // Strong keyword routing
-  const routes = [
-    { k: ["bar", "pub", "nightclub"], url: "/bar-epos.html", label: "Bar EPOS" },
-    { k: ["restaurant"], url: "/hospitality-pos.html", label: "Restaurant EPOS" },
-    { k: ["cafe", "coffee"], url: "/cafe-epos.html", label: "Café EPOS" },
-    { k: ["hotel"], url: "/hotel-epos.html", label: "Hotel EPOS" },
-    { k: ["member", "club"], url: "/members-club-epos.html", label: "Members’ Club EPOS" },
-    { k: ["hospital", "health"], url: "/hospital-epos.html", label: "Hospital & Healthcare EPOS" },
-    { k: ["retail", "shop", "store"], url: "/retail-pos.html", label: "Retail POS" },
-    { k: ["voucher", "gift"], url: "/digital-gift-vouchers.html", label: "GiveaVoucher" },
-    { k: ["payment", "tapapay", "card"], url: "/integrated-payments.html", label: "TapaPay Payments" },
-    { k: ["hardware", "terminal", "till"], url: "/hardware.html", label: "POS Hardware" },
+  const quick = [
+    { k: ["restaurant", "bar", "cafe"], r: "/hospitality-pos.html", l: "Hospitality EPOS" },
+    { k: ["retail", "shop", "store"], r: "/retail-pos.html", l: "Retail POS" },
+    { k: ["voucher", "gift"], r: "/digital-gift-vouchers.html", l: "GiveaVoucher" },
+    { k: ["payment", "tapapay", "card"], r: "/integrated-payments.html", l: "TapaPay Payments" },
+    { k: ["hardware", "terminal", "till"], r: "/hardware.html", l: "POS Hardware" },
   ];
+  for (const q of quick)
+    if (q.k.some((kw) => lower.includes(kw)))
+      return `🔗 You might like our <a href='${q.r}'>${q.l}</a> page — it covers that topic in more detail.`;
 
-  for (const r of routes)
-    if (r.k.some((kw) => lower.includes(kw)))
-      return `🔗 You might like our <a href='${r.url}'>${r.label}</a> page — it covers that topic in more detail.`;
+  try {
+    const urls = await getSitemapUrls("https://www.rstepos.com/sitemap.xml");
+    const scores = [];
+    for (const url of urls) {
+      const text = await fetchSiteText(url);
+      if (!text) continue;
+      const matches = lower
+        .split(/\s+/)
+        .map((w) => (text.toLowerCase().includes(w) ? 1 : 0))
+        .reduce((a, b) => a + b, 0);
+      if (matches > 0) scores.push({ url, matches });
+    }
+
+    scores.sort((a, b) => b.matches - a.matches);
+
+    if (scores.length === 1) {
+      const title = path.basename(scores[0].url).replace(/[-_]/g, " ").replace(".html", "");
+      return `🔎 I think you mean our <a href='${scores[0].url}' target='_blank'>${title}</a> page.`;
+    }
+
+    if (scores.length > 1) {
+      const links = scores
+        .slice(0, 5)
+        .map(
+          (s) =>
+            `<a href='${s.url}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${path
+              .basename(s.url)
+              .replace(/[-_]/g, " ")
+              .replace(".html", "")}</a>`
+        )
+        .join("");
+      return `💡 I found a few pages mentioning that:<br>${links}`;
+    }
+  } catch {}
 
   return (
-    "💬 I can help you find the right solution — just tell me your business type (e.g. café, bar, hotel, retail, hospital).<br><br>" +
+    "💬 I can help you find the right solution — just tell me your business type (e.g. café, bar, retail, hotel, hospital).<br><br>" +
     "Or browse all <a href='/products.html'>RST EPOS Products</a> to explore."
   );
 }
 
 // ------------------------------------------------------
-// 🌐 Root
+// 🌐 Root + Static Route
 // ------------------------------------------------------
 app.get("/", (req, res) => {
-  res.send(`<h1>🚀 Tappy Brain v12.5 Live</h1><p>Support follow-up + Sales routing active.</p>`);
+  res.send(`
+    <h1>🚀 Tappy Brain v12.4 is Live</h1>
+    <p>Multi-match Support + Sales Lead Capture enabled.</p>
+  `);
 });
 
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v12.5 listening on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v12.4 listening on port ${PORT}`)
 );
