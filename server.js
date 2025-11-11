@@ -145,8 +145,8 @@ app.post("/api/chat", async (req, res) => {
     if (["end", "exit", "close"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
-    // --------------------------
-// SALES MODE (v13.1 — improved pricing intent + lead capture)
+   // --------------------------
+// SALES MODE (v13.2 — fixed pricing flow / no Thinking delay)
 // --------------------------
 if (context === "sales") {
   // Handle active lead capture sequence first
@@ -155,6 +155,7 @@ if (context === "sales") {
     if (reply.complete) {
       logJSON(salesLeadsPath, s.lead);
       s.step = "none";
+      s.awaitingPriceConfirm = false;
       return res.json({
         reply:
           "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
@@ -164,36 +165,37 @@ if (context === "sales") {
   }
 
   // 🏷️ Price / quote / subscription intent handling
-  if (/(price|quote|cost|subscription|how much|pricing)/.test(lower)) {
-    // Step 1: ask for confirmation before taking details
-    if (!s.awaitingPriceConfirm) {
-      s.awaitingPriceConfirm = true;
-      return res.json({
-        reply:
-          "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
-      });
-    }
+  const priceIntent = /(price|quote|cost|subscription|how much|pricing)/.test(lower);
 
-    // Step 2: user confirms yes
-    if (/^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)/.test(lower)) {
-      s.awaitingPriceConfirm = false;
-      s.step = "name";
-      s.lead = {};
-      return res.json({
-        reply: "🙂 Great! What’s your *name*, please?",
-      });
-    }
+  // Step 1 — User mentions price for the first time
+  if (priceIntent && !s.awaitingPriceConfirm && !s.stepStarted) {
+    s.awaitingPriceConfirm = true;
+    return res.json({
+      reply:
+        "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
+    });
+  }
 
-    // Step 3: user declines or says no
-    if (/^(no|not now|later|maybe|n|nah)/.test(lower)) {
-      s.awaitingPriceConfirm = false;
-      return res.json({
-        reply:
-          "👍 No problem — you can also check our <a href='/index.html'>Products</a> pages for more details, or ask me about a specific feature.",
-      });
-    }
+  // Step 2 — User confirms yes
+  if (s.awaitingPriceConfirm && /^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)$/i.test(lower)) {
+    s.awaitingPriceConfirm = false;
+    s.step = "name";
+    s.lead = {};
+    s.stepStarted = true;
+    return res.json({ reply: "🙂 Great! What’s your *name*, please?" });
+  }
 
-    // Step 4: still waiting for a clear yes/no
+  // Step 3 — User declines
+  if (s.awaitingPriceConfirm && /^(no|not now|later|maybe|n|nah)$/i.test(lower)) {
+    s.awaitingPriceConfirm = false;
+    return res.json({
+      reply:
+        "👍 No problem — you can also check our <a href='/products.html'>Products</a> pages for more details, or ask me about a specific feature.",
+    });
+  }
+
+  // Step 4 — Awaiting explicit yes/no
+  if (s.awaitingPriceConfirm) {
     return res.json({
       reply:
         "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
@@ -205,64 +207,6 @@ if (context === "sales") {
   return res.json({ reply });
 }
 
-    // --------------------------
-    // SUPPORT MODE
-    // --------------------------
-    if (context === "support") {
-      const reply = await handleSupportAgent(message);
-      return res.json({ reply });
-    }
-
-    // --------------------------
-    // GENERAL MODE (Hybrid Router)
-    // --------------------------
-    if (context === "general") {
-      // 1️⃣ Check Sales pages first
-      const salesResult = await quickSalesLookup(message);
-      if (salesResult) return res.json({ reply: salesResult });
-
-      // 2️⃣ Then check Support FAQs
-      const supportResult = await quickSupportLookup(message);
-      if (supportResult) return res.json({ reply: supportResult });
-
-      // 3️⃣ Nothing found → ask for clarification
-      return res.json({
-        reply:
-          "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
-      });
-    }
-  } catch (err) {
-    console.error("❌ Chat error:", err);
-    res.status(500).json({ error: "Chat service unavailable" });
-  }
-});
-
-// ------------------------------------------------------
-// 🧩 Lead Capture Helper
-// ------------------------------------------------------
-function continueLeadCapture(s, message) {
-  switch (s.step) {
-    case "name":
-      s.lead.name = message.trim();
-      s.step = "company";
-      return { text: "🏢 Thanks! What’s your *company name*?" };
-    case "company":
-      s.lead.company = message.trim();
-      s.step = "email";
-      return { text: "📧 And what’s the best *email address* to send details to?" };
-    case "email":
-      if (!isValidEmail(message))
-        return { text: "⚠️ That email doesn’t look right — please re-enter it." };
-      s.lead.email = message.trim();
-      s.step = "comments";
-      return { text: "📝 Great — any specific notes or requirements for your quote? e.g. no of terminals, printers, card machines etc." };
-    case "comments":
-      s.lead.comments = message.trim();
-      return { complete: true };
-    default:
-      return { text: "💬 Please continue…" };
-  }
-}
 
 // ------------------------------------------------------
 // 🧠 Support Search + Interactive Selection
