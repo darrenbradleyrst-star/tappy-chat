@@ -240,43 +240,44 @@
     "link": "/bar-pos.html"
   },
   {
-    "id": 21,
-    "title": "Can I use my own hardware?",
-    "intro": "Yes — we can often work with your existing hardware if it meets our minimum specs.",
-    "steps": [
-      "The system requires a stable Windows 10+ device.",
-      "Receipt printers must be ESC/POS compatible.",
-      "Network and USB peripherals can be supported depending on drivers."
-    ],
-    "link": "/hardware.html",
-    "next": {
-      "question": "Do you know your current device specs?",
-      "options": {
-        "yes": 22,
-        "no": 23
-      }
+  "id": "21",
+  "title": "Can I use my own hardware?",
+  "intro": "Yes — we can often work with your existing hardware if it meets our minimum specs.",
+  "steps": [
+    "The system requires a stable Windows 10+ device.",
+    "Receipt printers must be ESC/POS compatible.",
+    "Network and USB peripherals can be supported depending on drivers."
+  ],
+  "link": "/hardware.html",
+  "next": {
+    "question": "Do you know your current device specs?",
+    "options": {
+      "yes": "22",
+      "no": "23"
     }
-  },
-  {
-    "id": 22,
-    "title": "Using Existing Hardware — Compatible",
-    "intro": "Great! If your hardware meets those specs, we can integrate it directly.",
-    "steps": [
-      "We’ll confirm compatibility during onboarding.",
-      "You may only need configuration or driver updates.",
-      "We’ll help test peripherals and ensure stability before go-live."
-    ],
-    "link": "/hardware.html"
-  },
-  {
-    "id": 23,
-    "title": "Using Existing Hardware — Not Compatible",
-    "intro": "No problem — we can supply pre-configured hardware bundles to get you started.",
-    "steps": [
-      "Our bundles include touchscreen terminals, printers, drawers and card readers.",
-      "All arrive configured, tested and ready to plug in.",
-      "This ensures reliability and reduces setup time."
-    ],
-    "link": "/hardware.html"
   }
+},
+{
+  "id": "22",
+  "title": "Using Existing Hardware — Compatible",
+  "intro": "Great! If your hardware meets those specs, we can integrate it directly.",
+  "steps": [
+    "We’ll confirm compatibility during onboarding.",
+    "You may only need configuration or driver updates.",
+    "We’ll help test peripherals and ensure stability before go-live."
+  ],
+  "link": "/hardware.html"
+},
+{
+  "id": "23",
+  "title": "Using Existing Hardware — Not Compatible",
+  "intro": "No problem — we can supply pre-configured hardware bundles to get you started.",
+  "steps": [
+    "Our bundles include touchscreen terminals, printers, drawers and card readers.",
+    "All arrive configured, tested and ready to plug in.",
+    "This ensures reliability and reduces setup time."
+  ],
+  "link": "/hardware.html"
+}
+
 ]
