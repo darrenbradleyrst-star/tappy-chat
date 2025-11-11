@@ -1,9 +1,9 @@
 // =========================================
-// RST EPOS Smart Chatbot API v13.4d
-// "Tappy Brain + Hybrid Context Router + Lead Capture"
-// ✅ Supports 'questions' or 'keywords' FAQ JSON formats
-// ✅ Restores pricing intent for sales queries
-// ✅ Render-safe with preflight, CORS, cookies, sessions
+// RST EPOS Smart Chatbot API v13.6
+// "Tappy Brain + FAQ Search + AI HTML Fallback"
+// ✅ Searches faqs_support.json for direct matches
+// ✅ If no FAQ match → uses OpenAI to analyse cached HTML pages
+// ✅ If still no result → suggests Contact Support / Browse FAQs
 // =========================================
 
 import express from "express";
@@ -25,7 +25,7 @@ const app = express();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ------------------------------------------------------
-// 📁 Paths + Cache Setup
+// 📁 Paths
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +34,7 @@ const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Express / CORS / Cookies / Rate Limit
+// 🌐 Middleware
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
@@ -45,11 +45,8 @@ app.use(
     origin: [
       "https://www.rstepos.com",
       "https://staging.rstepos.com",
-      "https://tappy-chat.onrender.com",
       "http://localhost:8080",
       "http://127.0.0.1:8080",
-      "http://localhost:5500",
-      "http://127.0.0.1:5500",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
@@ -57,19 +54,12 @@ app.use(
   })
 );
 
-// ✅ Explicit CORS Preflight Handler
 app.options("*", (req, res) => {
   res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type");
   res.header("Access-Control-Allow-Credentials", "true");
-  return res.sendStatus(200);
-});
-
-// Optional request logger
-app.use((req, res, next) => {
-  console.log(`🌐 ${req.method} ${req.path} from ${req.headers.origin || "unknown origin"}`);
-  next();
+  res.sendStatus(200);
 });
 
 app.use(
@@ -77,8 +67,6 @@ app.use(
     windowMs: 60 * 1000,
     max: 40,
     message: { error: "Rate limit exceeded — please wait a moment." },
-    standardHeaders: true,
-    legacyHeaders: false,
   })
 );
 
@@ -91,7 +79,7 @@ const logJSON = (file, data) =>
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
-// 📚 Load Support FAQs (supports 'questions' and 'keywords')
+// 📚 Load Support FAQs
 // ------------------------------------------------------
 const faqsSupportPath = path.join(__dirname, "faqs_support.json");
 let faqsSupport = [];
@@ -105,43 +93,112 @@ try {
         Array.isArray(f.answers) &&
         f.answers.length
     );
-    const invalidCount = raw.length - faqsSupport.length;
-    console.log(
-      `✅ Loaded ${faqsSupport.length} valid FAQ entries${
-        invalidCount > 0 ? ` (${invalidCount} invalid skipped)` : ""
-      }`
-    );
-  } else {
-    console.warn("⚠️ faqs_support.json not found");
-  }
+    console.log(`✅ Loaded ${faqsSupport.length} FAQ entries`);
+  } else console.warn("⚠️ faqs_support.json not found");
 } catch (err) {
   console.error("❌ Failed to load faqs_support.json:", err);
 }
 
 // ------------------------------------------------------
-// 🧠 Support Search
+// 🧠 Find FAQ Matches
 // ------------------------------------------------------
 function findSupportMatches(message) {
   const lower = (message || "").toLowerCase();
   return faqsSupport.filter((faq) => {
-    if (!faq) return false;
-    const title = faq.title ? faq.title.toLowerCase() : "";
-    const keywords = Array.isArray(faq.keywords)
-      ? faq.keywords
-      : Array.isArray(faq.questions)
-      ? faq.questions
-      : [];
-    return (
-      title.includes(lower) ||
-      keywords.some((k) => typeof k === "string" && lower.includes(k.toLowerCase()))
-    );
+    const list = faq.questions || faq.keywords || [];
+    return list.some((q) => q.toLowerCase().includes(lower) || lower.includes(q.toLowerCase()));
   });
 }
 
+// ------------------------------------------------------
+// 🌍 Cache + Fetch Site Text
+// ------------------------------------------------------
+async function getSitemapUrls(sitemapUrl = "https://www.rstepos.com/sitemap.xml") {
+  try {
+    const res = await fetch(sitemapUrl);
+    const xml = await res.text();
+    const parsed = await xml2js.parseStringPromise(xml);
+    if (parsed.urlset?.url) return parsed.urlset.url.map((u) => u.loc?.[0]).filter(Boolean);
+  } catch (e) {
+    console.warn("⚠️ Could not fetch sitemap:", e);
+  }
+  return [];
+}
+
+async function fetchSiteText(url) {
+  const safe = url.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+  const cacheFile = path.join(cacheDir, safe + ".txt");
+  if (fs.existsSync(cacheFile)) return fs.readFileSync(cacheFile, "utf8");
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return "";
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    $("script,style,nav,footer,header").remove();
+    const text = $("body").text().replace(/\s+/g, " ").trim();
+    if (text.length > 50) {
+      fs.writeFileSync(cacheFile, text);
+      return text;
+    }
+  } catch (e) {
+    console.warn("⚠️ Could not fetch:", url);
+  }
+  return "";
+}
+
+// ------------------------------------------------------
+// 🤖 OpenAI Fallback: Search Site Content for Context
+// ------------------------------------------------------
+async function aiSearchSite(message) {
+  try {
+    const urls = await getSitemapUrls();
+    const subset = urls.slice(0, 10); // limit for performance
+    const pages = [];
+
+    for (const url of subset) {
+      const text = await fetchSiteText(url);
+      if (text) pages.push({ url, text: text.slice(0, 2000) });
+    }
+
+    const prompt = `
+You are a support assistant for RST EPOS.
+User asked: "${message}"
+
+Given the following HTML text excerpts from website pages, identify if any seem relevant.
+If relevant, return the best-matching page URL and a short explanation.
+If none match, respond with "NO_MATCH".
+
+${pages.map((p, i) => `Page ${i + 1}: ${p.url}\n${p.text}`).join("\n\n")}
+    `;
+
+    const ai = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 200,
+      temperature: 0.2,
+    });
+
+    const result = ai.choices[0]?.message?.content || "";
+    if (result.includes("NO_MATCH")) return null;
+    const urlMatch = result.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+      return `💡 I found a page that might help:<br><a href="${urlMatch[0]}" target="_blank">${urlMatch[0]}</a><br><br>${result}`;
+    }
+    return result;
+  } catch (err) {
+    console.error("❌ AI site search failed:", err);
+    return null;
+  }
+}
+
+// ------------------------------------------------------
+// 🧩 Support Logic
+// ------------------------------------------------------
 async function handleSupportAgent(message, sessionId) {
   const s = sessions[sessionId] || {};
   const matches = findSupportMatches(message);
 
+  // Select a numbered FAQ
   if (s.awaitingFaqChoice && /^\d+$/.test(message.trim())) {
     const idx = parseInt(message.trim(), 10) - 1;
     const list = s.lastFaqList || [];
@@ -150,16 +207,18 @@ async function handleSupportAgent(message, sessionId) {
       s.awaitingFaqChoice = false;
       s.lastFaqList = null;
       const title = entry.title || entry.questions?.[0] || "Help Article";
-      return `📘 *${title}*<br>${entry.answers.join("<br>")}<br><br>Did that resolve your issue?`;
+      return `📘 <strong>${title}</strong><br>${entry.answers.join("<br>")}<br><br>Did that resolve your issue?`;
     }
   }
 
+  // Single match
   if (matches.length === 1) {
     const m = matches[0];
     const title = m.title || m.questions?.[0] || "Help Article";
-    return `📘 *${title}*<br>${m.answers.join("<br>")}<br><br>Did that resolve your issue?`;
+    return `📘 <strong>${title}</strong><br>${m.answers.join("<br>")}<br><br>Did that resolve your issue?`;
   }
 
+  // Multiple matches
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
@@ -169,64 +228,29 @@ async function handleSupportAgent(message, sessionId) {
     return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
 
-  return "🤔 I’m not sure about that one — can you describe the issue in more detail?";
+  // No match — use OpenAI site search fallback
+  const aiResult = await aiSearchSite(message);
+  if (aiResult) return aiResult;
+
+  // Still nothing
+  return `🙁 I couldn’t find an exact match.<br><br>
+Would you like to:<br>
+👉 <a href="/contact-us.html" target="_blank">Contact Support</a><br>
+💡 or <a href="/support.html" target="_blank">Browse the FAQ Library</a>?`;
 }
 
 // ------------------------------------------------------
-// 🛍️ Sales Agent (with restored price intent)
+// 🛍️ Sales Agent (price intent)
 // ------------------------------------------------------
 async function handleSalesAgent(message) {
   const lower = message.toLowerCase();
-
-  // ✅ Price intent restored
   const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
   if (priceIntent) {
     return `💬 We offer flexible low-monthly plans depending on your setup and card fees.<br><br>
 📅 You can <a href="/book-a-demo.html" target="_blank">book a demo</a> and one of our team will show you detailed pricing and features.`;
   }
 
-  const quick = [
-    { k: ["restaurant", "bar", "cafe"], r: "/hospitality-pos.html", l: "Hospitality EPOS" },
-    { k: ["retail", "shop", "store"], r: "/retail-pos.html", l: "Retail POS" },
-    { k: ["voucher", "gift"], r: "/digital-gift-vouchers.html", l: "GiveaVoucher" },
-    { k: ["payment", "tapapay", "card"], r: "/integrated-payments.html", l: "TapaPay Payments" },
-    { k: ["hardware", "terminal", "till"], r: "/hardware.html", l: "POS Hardware" },
-  ];
-
-  for (const q of quick)
-    if (q.k.some((kw) => lower.includes(kw)))
-      return `🔗 You might like our <a href='${q.r}'>${q.l}</a> page — it covers that topic in more detail.`;
-
   return "💬 Tell me what type of business you run (e.g. café, bar, retail), and I’ll show you the best solution.";
-}
-
-// ------------------------------------------------------
-// 🧩 Lead Capture
-// ------------------------------------------------------
-function continueLeadCapture(s, message) {
-  switch (s.step) {
-    case "name":
-      s.lead.name = message.trim();
-      s.step = "company";
-      return { text: "🏢 Thanks! What’s your *company name*?" };
-    case "company":
-      s.lead.company = message.trim();
-      s.step = "email";
-      return { text: "📧 And what’s the best *email address* to send details to?" };
-    case "email":
-      if (!isValidEmail(message))
-        return { text: "⚠️ That email doesn’t look right — please re-enter it." };
-      s.lead.email = message.trim();
-      s.step = "comments";
-      return {
-        text: "📝 Great — any specific notes or requirements for your quote? e.g. number of terminals, printers, or card machines?",
-      };
-    case "comments":
-      s.lead.comments = message.trim();
-      return { complete: true };
-    default:
-      return { text: "💬 Please continue…" };
-  }
 }
 
 // ------------------------------------------------------
@@ -253,48 +277,29 @@ app.post("/api/chat", async (req, res) => {
     return res.json({ reply: "Session reset OK." });
   }
 
+  const s = sessions[sessionId] || (sessions[sessionId] = { step: "none", lead: {} });
   if (!message) return res.status(400).json({ error: "No message provided" });
-  if (!sessions[sessionId]) sessions[sessionId] = { step: "none", module: "General", lead: {} };
-
-  const s = sessions[sessionId];
-  const lower = (message || "").toLowerCase().trim();
 
   try {
-    if (["restart", "new question"].includes(lower))
+    if (["restart", "new question"].includes(message.toLowerCase()))
       return res.json({ reply: "✅ No problem — please type your new question below." });
 
-    if (["end", "exit", "close"].includes(lower))
+    if (["end", "exit", "close"].includes(message.toLowerCase()))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
-    // SALES MODE
     if (context === "sales") {
-      if (s.step && s.step !== "none") {
-        const reply = continueLeadCapture(s, message);
-        if (reply.complete) {
-          logJSON(salesLeadsPath, s.lead);
-          s.step = "none";
-          return res.json({
-            reply:
-              "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
-          });
-        }
-        return res.json({ reply: reply.text });
-      }
-
       const reply = await handleSalesAgent(message);
       return res.json({ reply });
     }
 
-    // SUPPORT MODE
     if (context === "support") {
       const reply = await handleSupportAgent(message, sessionId);
       return res.json({ reply });
     }
 
-    // GENERAL MODE
     return res.json({
       reply:
-        "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
+        "🤔 I couldn’t find that in our help articles — would you like to <a href='/contact-us.html'>contact support</a> or <a href='/support.html'>browse FAQs</a>?",
     });
   } catch (err) {
     console.error("❌ Chat error:", err);
@@ -303,14 +308,13 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🌐 Root + Health Check
+// 🌐 Root Check
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "13.4d",
-    name: "Tappy Brain API",
-    message: "Supports 'questions' + pricing intent restored (sales queries).",
+    version: "13.6",
+    message: "Uses OpenAI to search cached HTML pages if FAQ not found.",
     time: new Date().toISOString(),
   });
 });
@@ -319,5 +323,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v13.4d listening on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v13.6 listening on port ${PORT}`)
 );
