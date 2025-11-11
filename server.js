@@ -1,8 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.4 (Enhanced UI Options)
-// "Tappy Brain – Sales FAQs Only (Render-safe CORS + Pill Buttons)"
-// ✅ Keeps all v14.3c logic intact
-// ✅ Adds support for clickable pill options instead of numeric replies
+// RST EPOS Smart Chatbot API v14.6 (Ranked + Debug Logging)
+// "Tappy Brain – Sales FAQs Only (Render-safe CORS + Pill Buttons + Weighted Search)"
+// ✅ Keeps all v14.5 logic
+// ✅ Adds console debug logging for top matches
 // =========================================
 
 import express from "express";
@@ -98,25 +98,59 @@ try {
 }
 
 // ------------------------------------------------------
-// 🔍 Search helper
+// 🔍 Smarter, Stricter Search Helper (Weighted Scoring + Debug Log)
 // ------------------------------------------------------
 function findSalesMatches(message) {
-  const lower = (message || "").toLowerCase().trim();
-  if (!lower) return [];
-  return faqSales.filter((faq) => {
-    const text = [
-      faq.title || "",
-      faq.intro || "",
-      ...(Array.isArray(faq.steps) ? faq.steps : [])
-    ]
-      .join(" ")
-      .toLowerCase()
-      .replace(/[^\w\s]/g, " ");
-    return (
-      text.includes(lower) ||
-      lower.split(" ").some((w) => w.length > 2 && text.includes(w))
+  const query = (message || "").toLowerCase().trim();
+  if (!query) return [];
+
+  const scored = faqSales
+    .map((faq) => {
+      const text = [
+        faq.title || "",
+        faq.intro || "",
+        ...(Array.isArray(faq.steps) ? faq.steps : [])
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      let score = 0;
+
+      // Exact title match
+      if (faq.title.toLowerCase() === query) score += 10;
+
+      // Phrase match
+      if (text.includes(query)) score += 6;
+
+      // Count partial word hits
+      const words = query.split(/\s+/).filter((w) => w.length > 2);
+      words.forEach((w) => {
+        const occurrences = (text.match(new RegExp(`\\b${w}\\b`, "g")) || []).length;
+        score += occurrences * 2;
+      });
+
+      return { faq, score };
+    })
+    // Keep strong matches only
+    .filter((obj) => obj.score >= 6)
+    // Sort best → worst
+    .sort((a, b) => b.score - a.score);
+
+  // Debug log: show top 5 results with scores
+  if (scored.length > 0) {
+    console.log(
+      `🔍 Query: "${query}" → ${scored.length} matches. Top results:`,
+      scored
+        .slice(0, 5)
+        .map((r) => `${r.faq.title} (${r.score})`)
+        .join(", ")
     );
-  });
+  } else {
+    console.log(`🔍 Query: "${query}" → no strong matches.`);
+  }
+
+  // Return only FAQ objects
+  return scored.map((obj) => obj.faq);
 }
 
 // ------------------------------------------------------
@@ -133,7 +167,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Enhanced for Pill Buttons)
+// 💬 Chat Handler (Enhanced for Pill Buttons + Ranked Search)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -160,26 +194,26 @@ async function handleSalesFAQ(message, sessionId) {
     }
   }
 
-  // ✅ Try to match by exact title first (for pill selections)
+  // ✅ Exact title match (for pill selections)
   const exactMatch = faqSales.find(
     (f) => f.title && f.title.toLowerCase() === lower
   );
   if (exactMatch) {
     s.currentId = exactMatch.id;
+    console.log(`🎯 Exact match found: "${exactMatch.title}"`);
     return showFAQ(exactMatch);
   }
 
-  // ✅ Broader fuzzy search
+  // ✅ Weighted search
   const matches = findSalesMatches(message);
 
-  // If fuzzy search returns just one, show it
   if (matches.length === 1) {
     const entry = matches[0];
     s.currentId = entry.id;
+    console.log(`🎯 Single match: "${entry.title}"`);
     return showFAQ(entry);
   }
 
-  // If too many matches, only show top 8 most relevant (shorten noise)
   if (matches.length > 1) {
     s.awaitingChoice = true;
     s.lastFaqList = matches;
@@ -190,6 +224,7 @@ async function handleSalesFAQ(message, sessionId) {
       index: i + 1
     }));
 
+    console.log(`🧩 Multiple matches (${matches.length}), showing top ${options.length}.`);
     return {
       type: "options",
       intro: "🔍 I found several possible matches:",
@@ -197,10 +232,9 @@ async function handleSalesFAQ(message, sessionId) {
     };
   }
 
-  // No matches at all
+  console.log(`🙁 No match found for "${message}"`);
   return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
 }
-
 
 // ------------------------------------------------------
 // 🔗 Endpoints
@@ -218,13 +252,7 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     const reply = await handleSalesFAQ(message, sessionId);
-
-    // ✅ Send structured response safely
-    if (typeof reply === "object" && reply.type === "options") {
-      res.json({ reply });
-    } else {
-      res.json({ reply });
-    }
+    res.json({ reply });
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
@@ -244,8 +272,8 @@ app.get("/test", (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.4",
-    mode: "Sales FAQ Only + Pill Buttons",
+    version: "14.6",
+    mode: "Sales FAQ Only + Pill Buttons + Ranked Search",
     faqs: faqSales.length,
     time: new Date().toISOString()
   });
@@ -255,5 +283,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.4 (Sales FAQ Only + Pill Buttons) running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.6 (Ranked Search + Debug Log) running on port ${PORT}`)
 );
