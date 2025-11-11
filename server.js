@@ -162,14 +162,37 @@ app.post("/api/chat", async (req, res) => {
         return res.json({ reply: reply.text });
       }
 
-      if (/(price|quote|cost|subscription)/.test(lower)) {
-        s.step = "name";
-        s.lead = {};
-        return res.json({
-          reply:
-            "💬 Sure — we offer low monthly plans depending on setup and card fees. What’s your *name*, please?",
-        });
-      }
+// 🏷️ PRICE / QUOTE INTENT
+if (/(price|quote|cost|subscription|how much|pricing)/.test(lower)) {
+  // If not yet in confirmation stage
+  if (!s.awaitingPriceConfirm) {
+    s.awaitingPriceConfirm = true;
+    return res.json({
+      reply:
+        "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
+    });
+  }
+
+  // If user confirms yes → start lead capture
+  if (/^(yes|ok|sure|please|yeah|yep)/.test(lower)) {
+    s.awaitingPriceConfirm = false;
+    s.step = "name";
+    s.lead = {};
+    return res.json({
+      reply: "🙂 Great! What’s your *name*, please?",
+    });
+  }
+
+  // If user says no → stay helpful
+  if (/^(no|not now|later|maybe)/.test(lower)) {
+    s.awaitingPriceConfirm = false;
+    return res.json({
+      reply:
+        "No problem — you can also check our <a href='/index.html'>Products</a> pages for more details, or ask me about a specific feature.",
+    });
+  }
+}
+
 
       const reply = await handleSalesAgent(message, s);
       return res.json({ reply });
@@ -225,7 +248,7 @@ function continueLeadCapture(s, message) {
         return { text: "⚠️ That email doesn’t look right — please re-enter it." };
       s.lead.email = message.trim();
       s.step = "comments";
-      return { text: "📝 Great — any specific notes or requirements for your quote?" };
+      return { text: "📝 Great — any specific notes or requirements for your quote? e.g. no of terminals, printers, card machines etc." };
     case "comments":
       s.lead.comments = message.trim();
       return { complete: true };
