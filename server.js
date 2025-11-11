@@ -5,6 +5,7 @@
 // ✅ Sales mode: pricing → demo link
 // ✅ Support mode: multi-match FAQ links + inline answers
 // ✅ Cookie-based sessions (Render-safe persistence)
+// ✅ Preflight handler to prevent 502 CORS errors
 // =========================================
 
 import express from "express";
@@ -44,19 +45,34 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: [
+      "https://www.rstepos.com",
+      "https://staging.rstepos.com",
+      "https://tappy-chat.onrender.com",
       "http://localhost:8080",
       "http://127.0.0.1:8080",
       "http://localhost:5500",
       "http://127.0.0.1:5500",
-      "https://staging.rstepos.com",
-      "https://www.rstepos.com",
-      "https://tappy-chat.onrender.com",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
   })
 );
+
+// ✅ Explicit CORS Preflight Handler (prevents 502 on Render)
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Credentials", "true");
+  return res.sendStatus(200);
+});
+
+// Optional: log incoming requests for debugging
+app.use((req, res, next) => {
+  console.log(`🌐 ${req.method} ${req.path} from ${req.headers.origin || "unknown origin"}`);
+  next();
+});
 
 app.use(
   rateLimit({
@@ -73,6 +89,7 @@ app.use(
 // ------------------------------------------------------
 const logJSON = (file, data) =>
   fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
+
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
@@ -124,15 +141,15 @@ async function fetchSiteText(url) {
 }
 
 // ------------------------------------------------------
-// 🧠 Support Search + Interactive Selection
+// 🧠 Support Search + Interactive Selection (Safe Version)
 // ------------------------------------------------------
 function findSupportMatches(message) {
-  const lower = message.toLowerCase();
-  return faqsSupport.filter(
-    (faq) =>
-      faq.title.toLowerCase().includes(lower) ||
-      faq.keywords?.some((k) => lower.includes(k))
-  );
+  const lower = message?.toLowerCase?.() || "";
+  return faqsSupport.filter((faq) => {
+    const title = faq.title ? faq.title.toLowerCase() : "";
+    const keywords = Array.isArray(faq.keywords) ? faq.keywords : [];
+    return title.includes(lower) || keywords.some((k) => lower.includes(k.toLowerCase()));
+  });
 }
 
 async function handleSupportAgent(message) {
@@ -165,7 +182,6 @@ async function handleSupportAgent(message) {
   return "🤔 I’m not sure about that one — can you describe the issue in more detail?";
 }
 
-// ✅ Missing helper added
 async function quickSupportLookup(message) {
   const matches = findSupportMatches(message);
   if (!matches.length) return null;
@@ -189,6 +205,7 @@ async function handleSalesAgent(message) {
     { k: ["payment", "tapapay", "card"], r: "/integrated-payments.html", l: "TapaPay Payments" },
     { k: ["hardware", "terminal", "till"], r: "/hardware.html", l: "POS Hardware" },
   ];
+
   for (const q of quick)
     if (q.k.some((kw) => lower.includes(kw)))
       return `🔗 You might like our <a href='${q.r}'>${q.l}</a> page — it covers that topic in more detail.`;
@@ -257,9 +274,15 @@ const sessions = {};
 app.post("/api/chat", async (req, res) => {
   const { message, context, reset } = req.body;
   let sessionId = req.cookies.sessionId;
+
   if (!sessionId) {
     sessionId = Math.random().toString(36).substring(2, 10);
-    res.cookie("sessionId", sessionId, { httpOnly: true, sameSite: "none", secure: true, maxAge: 1000 * 60 * 30 });
+    res.cookie("sessionId", sessionId, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 1000 * 60 * 30,
+    });
   }
 
   if (reset) {
@@ -269,12 +292,14 @@ app.post("/api/chat", async (req, res) => {
 
   if (!message) return res.status(400).json({ error: "No message provided" });
   if (!sessions[sessionId]) sessions[sessionId] = { step: "none", module: "General", lead: {} };
+
   const s = sessions[sessionId];
   const lower = message.toLowerCase().trim();
 
   try {
     if (["restart", "new question"].includes(lower))
       return res.json({ reply: "✅ No problem — please type your new question below." });
+
     if (["end", "exit", "close"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
@@ -313,7 +338,7 @@ app.post("/api/chat", async (req, res) => {
     }
 
     // --------------------------
-    // GENERAL MODE (Hybrid Router)
+    // GENERAL MODE
     // --------------------------
     if (context === "general") {
       const salesResult = await quickSalesLookup(message);
@@ -323,7 +348,8 @@ app.post("/api/chat", async (req, res) => {
       if (supportResult) return res.json({ reply: supportResult });
 
       return res.json({
-        reply: "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
+        reply:
+          "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
       });
     }
   } catch (err) {
@@ -340,7 +366,7 @@ app.get("/", (req, res) => {
     status: "ok",
     version: "13.4",
     name: "Tappy Brain API",
-    message: "Hybrid General Flow (Sales + Support Routing) enabled with persistent sessions.",
+    message: "Hybrid General Flow (Sales + Support Routing) enabled with persistent sessions and safe CORS.",
     time: new Date().toISOString(),
   });
 });
