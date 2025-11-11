@@ -206,7 +206,39 @@ if (context === "sales") {
   const reply = await handleSalesAgent(message, s);
   return res.json({ reply });
 }
+  // --------------------------
+  // SUPPORT MODE
+  // --------------------------
+  if (context === "support") {
+    const reply = await handleSupportAgent(message);
+    return res.json({ reply });
+  }
 
+  // --------------------------
+  // GENERAL MODE (Hybrid Router)
+  // --------------------------
+  if (context === "general") {
+    // 1️⃣ Check Sales pages first
+    const salesResult = await quickSalesLookup(message);
+    if (salesResult) return res.json({ reply: salesResult });
+
+    // 2️⃣ Then check Support FAQs
+    const supportResult = await quickSupportLookup(message);
+    if (supportResult) return res.json({ reply: supportResult });
+
+    // 3️⃣ Nothing found → ask for clarification
+    return res.json({
+      reply:
+        "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
+    });
+  }
+
+  // ✅ Close the main try
+  } catch (err) {
+    console.error("❌ Chat error:", err);
+    res.status(500).json({ error: "Chat service unavailable" });
+  }
+}); // ✅ closes app.post("/api/chat")
 
 // ------------------------------------------------------
 // 🧠 Support Search + Interactive Selection
@@ -245,9 +277,7 @@ async function handleSupportAgent(message) {
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
-    const numbered = matches
-      .map((m, i) => `${i + 1}. ${m.title}`)
-      .join("<br>");
+    const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
     return (
       "🔍 I found several possible matches:<br><br>" +
       numbered +
@@ -284,7 +314,6 @@ async function quickSupportLookup(message) {
     "<br><br>Please reply with the number of the article you'd like to view."
   );
 }
-
 
 // ------------------------------------------------------
 // 🛍️ Sales Search Helpers
@@ -353,10 +382,15 @@ async function quickSalesLookup(message) {
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.send(`
-    <h1>🚀 Tappy Brain v13.0 Live</h1>
+    <h1>🚀 Tappy Brain v13.2 Live</h1>
     <p>Hybrid General Flow (Sales + Support Routing) enabled.</p>
   `);
 });
+
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Tappy Brain v13.2 listening on port ${PORT}`)
+);
+
 
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`🚀 Tappy Brain v13.0 listening on port ${PORT}`)
