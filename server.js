@@ -167,7 +167,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Enhanced for Pill Buttons + Ranked Search)
+// 💬 Chat Handler (Enhanced Exact Match + Weighted Search)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -194,17 +194,21 @@ async function handleSalesFAQ(message, sessionId) {
     }
   }
 
-  // ✅ Exact title match (for pill selections)
+  // ✅ Step 1: Exact title match (ignore punctuation & case)
+  const normalise = (str) =>
+    (str || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
+
   const exactMatch = faqSales.find(
-    (f) => f.title && f.title.toLowerCase() === lower
+    (f) => normalise(f.title) === normalise(lower)
   );
+
   if (exactMatch) {
     s.currentId = exactMatch.id;
     console.log(`🎯 Exact match found: "${exactMatch.title}"`);
     return showFAQ(exactMatch);
   }
 
-  // ✅ Weighted search
+  // ✅ Step 2: Weighted fuzzy search
   const matches = findSalesMatches(message);
 
   if (matches.length === 1) {
@@ -214,6 +218,7 @@ async function handleSalesFAQ(message, sessionId) {
     return showFAQ(entry);
   }
 
+  // ✅ Step 3: Multiple matches → show pill options (top 8)
   if (matches.length > 1) {
     s.awaitingChoice = true;
     s.lastFaqList = matches;
@@ -224,7 +229,9 @@ async function handleSalesFAQ(message, sessionId) {
       index: i + 1
     }));
 
-    console.log(`🧩 Multiple matches (${matches.length}), showing top ${options.length}.`);
+    console.log(
+      `🧩 Multiple matches (${matches.length}) — no exact title match. Showing top ${options.length}.`
+    );
     return {
       type: "options",
       intro: "🔍 I found several possible matches:",
@@ -232,9 +239,11 @@ async function handleSalesFAQ(message, sessionId) {
     };
   }
 
+  // ✅ Step 4: No matches
   console.log(`🙁 No match found for "${message}"`);
   return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
 }
+
 
 // ------------------------------------------------------
 // 🔗 Endpoints
