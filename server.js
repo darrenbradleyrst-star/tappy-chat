@@ -160,25 +160,36 @@ async function handleSalesFAQ(message, sessionId) {
     }
   }
 
-  // ✅ Match search
+  // ✅ Try to match by exact title first (for pill selections)
+  const exactMatch = faqSales.find(
+    (f) => f.title && f.title.toLowerCase() === lower
+  );
+  if (exactMatch) {
+    s.currentId = exactMatch.id;
+    return showFAQ(exactMatch);
+  }
+
+  // ✅ Broader fuzzy search
   const matches = findSalesMatches(message);
+
+  // If fuzzy search returns just one, show it
   if (matches.length === 1) {
     const entry = matches[0];
     s.currentId = entry.id;
     return showFAQ(entry);
   }
 
-  // ✅ Multiple matches → return pill options
+  // If too many matches, only show top 8 most relevant (shorten noise)
   if (matches.length > 1) {
     s.awaitingChoice = true;
     s.lastFaqList = matches;
 
-    const options = matches.map((m, i) => ({
+    const trimmed = matches.slice(0, 8);
+    const options = trimmed.map((m, i) => ({
       label: m.title,
       index: i + 1
     }));
 
-    // return structured object for front-end rendering
     return {
       type: "options",
       intro: "🔍 I found several possible matches:",
@@ -186,8 +197,10 @@ async function handleSalesFAQ(message, sessionId) {
     };
   }
 
+  // No matches at all
   return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
 }
+
 
 // ------------------------------------------------------
 // 🔗 Endpoints
