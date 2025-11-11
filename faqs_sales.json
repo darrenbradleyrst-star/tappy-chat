@@ -244,7 +244,7 @@
     "title": "Can I use my own hardware?",
     "intro": "Yes — we can often work with your existing hardware if it meets our minimum specs.",
     "steps": [
-      "The system requires a stable Windows 10+ or Android 10+ device.",
+      "The system requires a stable Windows 10+ device.",
       "Receipt printers must be ESC/POS compatible.",
       "Network and USB peripherals can be supported depending on drivers."
     ],
