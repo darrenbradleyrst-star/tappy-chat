@@ -1,9 +1,9 @@
 // =========================================
-// RST EPOS Smart Chatbot API v13.4c
+// RST EPOS Smart Chatbot API v13.4d
 // "Tappy Brain + Hybrid Context Router + Lead Capture"
 // ✅ Supports 'questions' or 'keywords' FAQ JSON formats
-// ✅ Safe fallback for missing titles
-// ✅ Maintains all features of v13.4a
+// ✅ Restores pricing intent for sales queries
+// ✅ Render-safe with preflight, CORS, cookies, sessions
 // =========================================
 
 import express from "express";
@@ -66,7 +66,7 @@ app.options("*", (req, res) => {
   return res.sendStatus(200);
 });
 
-// Log requests (optional)
+// Optional request logger
 app.use((req, res, next) => {
   console.log(`🌐 ${req.method} ${req.path} from ${req.headers.origin || "unknown origin"}`);
   next();
@@ -119,7 +119,7 @@ try {
 }
 
 // ------------------------------------------------------
-// 🧠 Support Search + Selection
+// 🧠 Support Search
 // ------------------------------------------------------
 function findSupportMatches(message) {
   const lower = (message || "").toLowerCase();
@@ -173,10 +173,18 @@ async function handleSupportAgent(message, sessionId) {
 }
 
 // ------------------------------------------------------
-// 🛍️ Sales Mode
+// 🛍️ Sales Agent (with restored price intent)
 // ------------------------------------------------------
 async function handleSalesAgent(message) {
   const lower = message.toLowerCase();
+
+  // ✅ Price intent restored
+  const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
+  if (priceIntent) {
+    return `💬 We offer flexible low-monthly plans depending on your setup and card fees.<br><br>
+📅 You can <a href="/book-a-demo.html" target="_blank">book a demo</a> and one of our team will show you detailed pricing and features.`;
+  }
+
   const quick = [
     { k: ["restaurant", "bar", "cafe"], r: "/hospitality-pos.html", l: "Hospitality EPOS" },
     { k: ["retail", "shop", "store"], r: "/retail-pos.html", l: "Retail POS" },
@@ -258,6 +266,7 @@ app.post("/api/chat", async (req, res) => {
     if (["end", "exit", "close"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
+    // SALES MODE
     if (context === "sales") {
       if (s.step && s.step !== "none") {
         const reply = continueLeadCapture(s, message);
@@ -271,15 +280,18 @@ app.post("/api/chat", async (req, res) => {
         }
         return res.json({ reply: reply.text });
       }
+
       const reply = await handleSalesAgent(message);
       return res.json({ reply });
     }
 
+    // SUPPORT MODE
     if (context === "support") {
       const reply = await handleSupportAgent(message, sessionId);
       return res.json({ reply });
     }
 
+    // GENERAL MODE
     return res.json({
       reply:
         "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
@@ -296,9 +308,9 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "13.4c",
+    version: "13.4d",
     name: "Tappy Brain API",
-    message: "Now supports 'questions' or 'keywords' in FAQ JSON files.",
+    message: "Supports 'questions' + pricing intent restored (sales queries).",
     time: new Date().toISOString(),
   });
 });
@@ -307,5 +319,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v13.4c listening on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v13.4d listening on port ${PORT}`)
 );
