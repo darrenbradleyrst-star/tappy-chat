@@ -146,57 +146,64 @@ app.post("/api/chat", async (req, res) => {
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
     // --------------------------
-    // SALES MODE
-    // --------------------------
-    if (context === "sales") {
-      if (s.step && s.step !== "none") {
-        const reply = continueLeadCapture(s, message);
-        if (reply.complete) {
-          logJSON(salesLeadsPath, s.lead);
-          s.step = "none";
-          return res.json({
-            reply:
-              "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
-          });
-        }
-        return res.json({ reply: reply.text });
-      }
-
-// 🏷️ PRICE / QUOTE INTENT
-if (/(price|quote|cost|subscription|how much|pricing)/.test(lower)) {
-  // If not yet in confirmation stage
-  if (!s.awaitingPriceConfirm) {
-    s.awaitingPriceConfirm = true;
-    return res.json({
-      reply:
-        "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
-    });
-  }
-
-  // If user confirms yes → start lead capture
-  if (/^(yes|ok|sure|please|yeah|yep)/.test(lower)) {
-    s.awaitingPriceConfirm = false;
-    s.step = "name";
-    s.lead = {};
-    return res.json({
-      reply: "🙂 Great! What’s your *name*, please?",
-    });
-  }
-
-  // If user says no → stay helpful
-  if (/^(no|not now|later|maybe)/.test(lower)) {
-    s.awaitingPriceConfirm = false;
-    return res.json({
-      reply:
-        "No problem — you can also check our <a href='/index.html'>Products</a> pages for more details, or ask me about a specific feature.",
-    });
-  }
-}
-
-
-      const reply = await handleSalesAgent(message, s);
-      return res.json({ reply });
+// SALES MODE (v13.1 — improved pricing intent + lead capture)
+// --------------------------
+if (context === "sales") {
+  // Handle active lead capture sequence first
+  if (s.step && s.step !== "none") {
+    const reply = continueLeadCapture(s, message);
+    if (reply.complete) {
+      logJSON(salesLeadsPath, s.lead);
+      s.step = "none";
+      return res.json({
+        reply:
+          "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
+      });
     }
+    return res.json({ reply: reply.text });
+  }
+
+  // 🏷️ Price / quote / subscription intent handling
+  if (/(price|quote|cost|subscription|how much|pricing)/.test(lower)) {
+    // Step 1: ask for confirmation before taking details
+    if (!s.awaitingPriceConfirm) {
+      s.awaitingPriceConfirm = true;
+      return res.json({
+        reply:
+          "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
+      });
+    }
+
+    // Step 2: user confirms yes
+    if (/^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)/.test(lower)) {
+      s.awaitingPriceConfirm = false;
+      s.step = "name";
+      s.lead = {};
+      return res.json({
+        reply: "🙂 Great! What’s your *name*, please?",
+      });
+    }
+
+    // Step 3: user declines or says no
+    if (/^(no|not now|later|maybe|n|nah)/.test(lower)) {
+      s.awaitingPriceConfirm = false;
+      return res.json({
+        reply:
+          "👍 No problem — you can also check our <a href='/index.html'>Products</a> pages for more details, or ask me about a specific feature.",
+      });
+    }
+
+    // Step 4: still waiting for a clear yes/no
+    return res.json({
+      reply:
+        "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
+    });
+  }
+
+  // Normal sales lookups (non-pricing queries)
+  const reply = await handleSalesAgent(message, s);
+  return res.json({ reply });
+}
 
     // --------------------------
     // SUPPORT MODE
@@ -258,60 +265,82 @@ function continueLeadCapture(s, message) {
 }
 
 // ------------------------------------------------------
-// 🧠 Support Search Helpers
+// 🧠 Support Search + Interactive Selection
 // ------------------------------------------------------
-function findSupportMatches(message) {
-  const lower = message.toLowerCase();
-  const words = lower.split(/\s+/).filter((w) => w.length > 2);
-  const results = [];
-  for (const entry of faqsSupport) {
-    if (!entry.questions || !entry.answers) continue;
-    const allQ = entry.questions.map((q) => q.toLowerCase());
-    const score = allQ.reduce((sum, q) => {
-      const overlap = q.split(/\s+/).filter((w) => words.includes(w)).length;
-      return sum + (overlap > 0 ? 1 : 0);
-    }, 0);
-    if (score > 0)
-      results.push({
-        title: entry.title || entry.questions[0],
-        url: entry.url || null,
-        answers: entry.answers,
-      });
-  }
-  return results.slice(0, 5);
-}
-
 async function handleSupportAgent(message) {
+  const s = sessions[Object.keys(sessions)[0]]; // basic per-IP session reference
   const matches = findSupportMatches(message);
-  if (matches.length === 1)
-    return matches[0].answers.join("<br>") + "<br><br>Did that resolve your issue?";
-  if (matches.length > 1) {
-    const links = matches
-      .map(
-        (m, i) =>
-          `<a href='${m.url ||
-            "#"}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${m.title}</a>`
-      )
-      .join("");
-    return `🔍 I found several articles that might help:<br>${links}`;
+
+  // 🧩 If user previously chose an article number
+  if (s.awaitingFaqChoice && /^\d+$/.test(message.trim())) {
+    const idx = parseInt(message.trim(), 10) - 1;
+    const list = s.lastFaqList || [];
+    if (list[idx]) {
+      const entry = list[idx];
+      s.awaitingFaqChoice = false;
+      s.lastFaqList = null;
+      return (
+        `📘 *${entry.title}*<br>` +
+        entry.answers.join("<br>") +
+        "<br><br>Did that resolve your issue?"
+      );
+    }
   }
+
+  // 🎯 One clear match → show steps
+  if (matches.length === 1) {
+    s.awaitingFaqChoice = false;
+    return (
+      `📘 *${matches[0].title}*<br>` +
+      matches[0].answers.join("<br>") +
+      "<br><br>Did that resolve your issue?"
+    );
+  }
+
+  // 📋 Multiple possible matches → show numbered list
+  if (matches.length > 1) {
+    s.awaitingFaqChoice = true;
+    s.lastFaqList = matches;
+    const numbered = matches
+      .map((m, i) => `${i + 1}. ${m.title}`)
+      .join("<br>");
+    return (
+      "🔍 I found several possible matches:<br><br>" +
+      numbered +
+      "<br><br>Please reply with the number of the article you'd like to view."
+    );
+  }
+
+  // ❌ No matches
   return "🤔 I’m not sure about that one — can you describe the issue in more detail?";
 }
 
 async function quickSupportLookup(message) {
+  const s = sessions[Object.keys(sessions)[0]];
   const matches = findSupportMatches(message);
+
   if (!matches.length) return null;
-  if (matches.length === 1)
-    return `🧩 This might help:<br>${matches[0].answers.join("<br>")}<br><br>Did that fix it?`;
-  const links = matches
-    .map(
-      (m) =>
-        `<a href='${m.url ||
-          "#"}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${m.title}</a>`
-    )
-    .join("");
-  return `💡 I found some support articles that might match:<br>${links}`;
+
+  // Single match: show steps
+  if (matches.length === 1) {
+    return (
+      `🧩 This might help:<br><strong>${matches[0].title}</strong><br>` +
+      matches[0].answers.join("<br>") +
+      "<br><br>Did that fix it?"
+    );
+  }
+
+  // Multiple matches: show as numbered list (not links)
+  s.awaitingFaqChoice = true;
+  s.lastFaqList = matches;
+  const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
+  return (
+    "💡 I found some support articles that might match:<br><br>" +
+    numbered +
+    "<br><br>Please reply with the number of the article you'd like to view."
+  );
 }
+
 
 // ------------------------------------------------------
 // 🛍️ Sales Search Helpers
