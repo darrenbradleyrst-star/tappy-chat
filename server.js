@@ -1,8 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.1
+// RST EPOS Smart Chatbot API v14.1 (Render Fix)
 // "Tappy Brain + Full Hardcoded HTML Page List + FAQ + AI Fallback"
-// ✅ Uses your exact HTML filenames (from screenshots)
-// ✅ Keeps all FAQ, AI fallback, and sales logic
+// ✅ Keeps all logic intact
+// ✅ Adds Render-safe CORS & Preflight (fixes 502 errors)
 // =========================================
 
 import express from "express";
@@ -32,31 +32,57 @@ const faqsSupportPath = path.join(__dirname, "faqs_support.json");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Middleware
+// 🌐 Middleware (Render-safe CORS)
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+
+const allowedOrigins = [
+  "https://staging.rstepos.com",
+  "https://www.rstepos.com",
+  "https://tappy-chat.onrender.com",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+];
+
 app.use(
   cors({
-    origin: [
-      "https://staging.rstepos.com",
-      "https://www.rstepos.com",
-      "http://localhost:8080",
-      "http://127.0.0.1:8080",
-    ],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
+    optionsSuccessStatus: 200,
   })
 );
+
+// ✅ Global OPTIONS handler to fix Render 502 Preflight
 app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Vary", "Origin");
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Credentials", "true");
-  res.sendStatus(200);
+  res.status(200).send("OK");
 });
+
+// Optional debug log (safe to leave)
+app.use((req, res, next) => {
+  console.log(`🌐 ${req.method} ${req.path} from ${req.headers.origin || "unknown"}`);
+  next();
+});
+
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -215,29 +241,23 @@ async function handleSupportAgent(message, sessionId) {
   const s = sessions[sessionId];
   const lowerMsg = (message || "").toLowerCase().trim();
 
-  // User selecting from previous FAQ list
   if (s.awaitingFaqChoice && /^\d+$/.test(lowerMsg)) {
     const idx = parseInt(lowerMsg, 10) - 1;
     const list = s.lastFaqList || [];
-
     if (list[idx]) {
       const entry = list[idx];
       s.awaitingFaqChoice = false;
       s.lastFaqList = null;
       sessions[sessionId] = s;
-
       const title = entry.title || entry.questions?.[0] || "Help Article";
       const steps = Array.isArray(entry.answers)
         ? entry.answers.join("<br>")
         : entry.answers;
       return `📘 <strong>${title}</strong><br>${steps}<br><br>Did that resolve your issue?`;
     }
-
-    // If invalid number entered
     return `⚠️ Please reply with a valid number from the list above.`;
   }
 
-  // Try direct FAQ match
   const matches = findSupportMatches(message);
   if (matches.length === 1) {
     const m = matches[0];
@@ -248,32 +268,27 @@ async function handleSupportAgent(message, sessionId) {
     return `📘 <strong>${title}</strong><br>${steps}<br><br>Did that resolve your issue?`;
   }
 
-  // Multiple FAQ matches
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
     sessions[sessionId] = s;
-
     const numbered = matches
       .map((m, i) => `${i + 1}. ${m.title || m.questions?.[0] || "Help Article"}`)
       .join("<br>");
     return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
 
-  // No FAQ match → AI site content search
   const aiResult = await aiSearchSite(message);
   if (aiResult) return aiResult;
 
-  // Fallback if nothing found
   return `🙁 I couldn’t find an exact match.<br><br>
 Would you like to:<br>
 👉 <a href="/contact-us.html">Contact Support</a><br>
 💡 or <a href="/support.html">Browse the FAQ Library</a>?`;
 }
 
-
 // ------------------------------------------------------
-// 🛍️ Sales Agent
+// 🛍️ Sales Agent (unchanged)
 // ------------------------------------------------------
 async function handleSalesAgent(message) {
   const lower = message.toLowerCase();
@@ -283,28 +298,27 @@ async function handleSalesAgent(message) {
 📅 You can <a href="/book-a-demo.html">book a demo</a> and one of our team will show you detailed pricing and features.`;
   }
 
-const quick = [
-  { k: ["bar", "pub", "nightclub"], url: "/bar-pos.html", label: "Bar POS Systems" },
-  { k: ["bakery", "patisserie"], url: "/bakery-pos.html", label: "Bakery POS Systems" },
-  { k: ["restaurant", "bistro", "dining"], url: "/restaurant-pos.html", label: "Restaurant POS Systems" },
-  { k: ["cafe", "coffee", "coffee shop"], url: "/cafe-coffee-shop-pos.html", label: "Café & Coffee Shop POS Systems" },
-  { k: ["hotel", "guestline", "protel", "mews", "accommodation"], url: "/hotel-pos.html", label: "Hotel & Hospitality POS Systems" },
-  { k: ["retail", "shop", "store", "boutique"], url: "/retail-pos.html", label: "Retail POS Systems" },
-  { k: ["member", "membership", "club", "golf"], url: "/members-clubs-pos.html", label: "Members’ Club POS Systems" },
-  { k: ["education", "school", "college", "university", "canteen"], url: "/school-education-university-pos.html", label: "Education & Canteen POS Systems" },
-  { k: ["hospital", "clinic", "healthcare"], url: "/hospital-clinic-pos.html", label: "Hospital & Healthcare POS Systems" },
-  { k: ["farm", "farm shop", "deli"], url: "/farm-shop-pos.html", label: "Farm Shop POS Systems" },
-  { k: ["fast food", "pizza", "takeaway"], url: "/fastfood-pizza-pos.html", label: "Fast Food & Pizza POS Systems" },
-  { k: ["festival", "event", "mobile event"], url: "/festival-events-pos.html", label: "Festival & Events POS Systems" },
-  { k: ["food truck", "street food", "van"], url: "/food-truck-pos.html", label: "Food Truck POS Systems" },
-  { k: ["gift shop", "souvenir"], url: "/gift-shop-pos.html", label: "Gift Shop POS Systems" },
-  { k: ["convenience", "corner shop", "newsagent"], url: "/convenience-store-pos.html", label: "Convenience Store POS Systems" },
-  { k: ["stadium", "arena", "sports"], url: "/stadium-pos.html", label: "Stadium & Venue POS Systems" },
-  { k: ["off licence", "off sales", "wine shop"], url: "/off-sales-pos.html", label: "Off-Sales & Off-Licence POS Systems" },
-  { k: ["mobile", "portable", "pop up"], url: "/mobile-pos.html", label: "Mobile POS Systems" },
-  { k: ["hospitality", "restaurant", "bar", "cafe"], url: "/hospitality-pos.html", label: "Hospitality POS Overview" },
-];
-
+  const quick = [
+    { k: ["bar", "pub", "nightclub"], url: "/bar-pos.html", label: "Bar POS Systems" },
+    { k: ["bakery", "patisserie"], url: "/bakery-pos.html", label: "Bakery POS Systems" },
+    { k: ["restaurant", "bistro", "dining"], url: "/restaurant-pos.html", label: "Restaurant POS Systems" },
+    { k: ["cafe", "coffee", "coffee shop"], url: "/cafe-coffee-shop-pos.html", label: "Café & Coffee Shop POS Systems" },
+    { k: ["hotel", "guestline", "protel", "mews", "accommodation"], url: "/hotel-pos.html", label: "Hotel & Hospitality POS Systems" },
+    { k: ["retail", "shop", "store", "boutique"], url: "/retail-pos.html", label: "Retail POS Systems" },
+    { k: ["member", "membership", "club", "golf"], url: "/members-clubs-pos.html", label: "Members’ Club POS Systems" },
+    { k: ["education", "school", "college", "university", "canteen"], url: "/school-education-university-pos.html", label: "Education & Canteen POS Systems" },
+    { k: ["hospital", "clinic", "healthcare"], url: "/hospital-clinic-pos.html", label: "Hospital & Healthcare POS Systems" },
+    { k: ["farm", "farm shop", "deli"], url: "/farm-shop-pos.html", label: "Farm Shop POS Systems" },
+    { k: ["fast food", "pizza", "takeaway"], url: "/fastfood-pizza-pos.html", label: "Fast Food & Pizza POS Systems" },
+    { k: ["festival", "event", "mobile event"], url: "/festival-events-pos.html", label: "Festival & Events POS Systems" },
+    { k: ["food truck", "street food", "van"], url: "/food-truck-pos.html", label: "Food Truck POS Systems" },
+    { k: ["gift shop", "souvenir"], url: "/gift-shop-pos.html", label: "Gift Shop POS Systems" },
+    { k: ["convenience", "corner shop", "newsagent"], url: "/convenience-store-pos.html", label: "Convenience Store POS Systems" },
+    { k: ["stadium", "arena", "sports"], url: "/stadium-pos.html", label: "Stadium & Venue POS Systems" },
+    { k: ["off licence", "off sales", "wine shop"], url: "/off-sales-pos.html", label: "Off-Sales & Off-Licence POS Systems" },
+    { k: ["mobile", "portable", "pop up"], url: "/mobile-pos.html", label: "Mobile POS Systems" },
+    { k: ["hospitality", "restaurant", "bar", "cafe"], url: "/hospitality-pos.html", label: "Hospitality POS Overview" },
+  ];
 
   for (const q of quick) {
     if (q.k.some((kw) => lower.includes(kw))) {
@@ -364,5 +378,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.1 listening on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.1 (Render Fix) listening on port ${PORT}`)
 );
