@@ -386,7 +386,14 @@ app.get("/", (req, res) => {
     version: "13.2",
     name: "Tappy Brain API",
     message: "Hybrid General Flow (Sales + Support Routing) enabled.",
-    time: new Date().toISOString()
+    time: new Date().toISOString(),
   });
+});
 
+// ------------------------------------------------------
+// 🚀 Start Server
+// ------------------------------------------------------
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Tappy Brain v13.2 listening on port ${PORT}`);
+});
 
