@@ -1,10 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v12.6 ("Tappy Brain + Inline Support")
-// ✅ Support mode now shows FAQ suggestions inline
-// ✅ User can choose a matching question (1–5 or by name)
-// ✅ Displays step-by-step solution directly in chat
-// ✅ Then asks if issue was resolved
-// ✅ Sales mode: keeps lead capture + smart routing
+// RST EPOS Smart Chatbot API v12.5 ("Tappy Brain + Agentic Context + Lead Capture + Follow-up")
+// ✅ Support mode: clickable FAQ links + follow-up question
+// ✅ Sales mode: improved keyword routing (bar, cafe, hotel, members, etc.)
+// ✅ Lead capture (Name → Company → Email → Comments)
 // =========================================
 
 import express from "express";
@@ -13,6 +11,8 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import fetch from "node-fetch";
+import * as cheerio from "cheerio";
+import xml2js from "xml2js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -23,32 +23,19 @@ const app = express();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ------------------------------------------------------
-// 📁 Paths & Setup
+// 📁 Setup
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const cacheDir = path.join(__dirname, "cache");
 const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
-
-const faqsSupportPath = path.join(__dirname, "faqs_support.json");
-let faqsSupport = [];
-
-if (fs.existsSync(faqsSupportPath)) {
-  try {
-    faqsSupport = JSON.parse(fs.readFileSync(faqsSupportPath, "utf8"));
-    console.log(`✅ Loaded ${faqsSupport.length} support FAQ entries`);
-  } catch (err) {
-    console.error("❌ Failed to parse faqs_support.json:", err);
-  }
-} else {
-  console.warn("⚠️ faqs_support.json not found");
-}
+if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Express Config
+// 🌐 Middleware
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
-
 app.use(
   cors({
     origin: [
@@ -65,7 +52,6 @@ app.use(
     credentials: true,
   })
 );
-
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -75,14 +61,27 @@ app.use(
 );
 
 // ------------------------------------------------------
-// 🧾 Utilities
+// 📚 Load FAQs
+// ------------------------------------------------------
+const faqsSupportPath = path.join(__dirname, "faqs_support.json");
+let faqsSupport = [];
+try {
+  if (fs.existsSync(faqsSupportPath))
+    faqsSupport = JSON.parse(fs.readFileSync(faqsSupportPath, "utf8"));
+  console.log(`✅ Loaded ${faqsSupport.length} support FAQ entries`);
+} catch (err) {
+  console.error("❌ Failed to load faqs_support.json:", err);
+}
+
+// ------------------------------------------------------
+// 🧾 Utility
 // ------------------------------------------------------
 const logJSON = (file, data) =>
   fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
-// 💬 Sessions & Chat Route
+// 💬 Chat Route
 // ------------------------------------------------------
 const sessions = {};
 
@@ -91,101 +90,76 @@ app.post("/api/chat", async (req, res) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
   if (reset) {
-    sessions[ip] = { step: "none", mode: "general", lead: {}, supportList: [] };
+    sessions[ip] = { step: "none", mode: "general", lead: {} };
     return res.json({ reply: "Session reset OK." });
   }
 
   if (!message) return res.status(400).json({ error: "No message provided" });
-  if (!sessions[ip])
-    sessions[ip] = { step: "none", mode: context || "general", lead: {}, supportList: [] };
-
+  if (!sessions[ip]) sessions[ip] = { step: "none", mode: context || "general", lead: {} };
   const s = sessions[ip];
   const lower = message.toLowerCase().trim();
 
   try {
-    // ✅ Universal resets
+    // ✅ Handle universal commands
     if (["restart", "new question", "start over"].includes(lower)) {
       s.step = "none";
-      s.supportList = [];
       return res.json({ reply: "✅ No problem — please type your new question below." });
     }
 
-    // ✅ Follow-up logic after FAQ shown
+    // ✅ Support mode follow-up
     if (s.step === "support_followup") {
       if (["yes", "yep", "yeah", "sorted"].includes(lower)) {
         s.step = "none";
-        s.supportList = [];
         return res.json({ reply: "✅ Glad to hear that!" });
       }
       if (["no", "nope", "not yet", "still broken"].includes(lower)) {
         s.step = "none";
-        s.supportList = [];
         return res.json({
-          reply: "😕 No problem — please describe what’s still not working and I’ll try to help.",
+          reply: "😕 No problem — please describe what’s still not working, and I’ll try to help.",
         });
       }
     }
 
-    // ✅ Handle Support Mode
+    // 🟣 Support / General Mode
     if (context === "support" || context === "general") {
-      // If waiting for a numbered selection
-      if (s.step === "support_select") {
-        const choice = parseInt(lower);
-        let chosen = null;
-
-        if (!isNaN(choice) && s.supportList[choice - 1])
-          chosen = s.supportList[choice - 1];
-        else
-          chosen = s.supportList.find((f) =>
-            f.title.toLowerCase().includes(lower)
-          );
-
-        if (chosen) {
-          s.step = "support_followup";
-          s.supportList = [];
-          const answer =
-            chosen.answers?.map((a, i) => `Step ${i + 1}: ${a}`).join("<br>") ||
-            "No detailed steps found.";
-          return res.json({
-            reply: `💡 *${chosen.title}*<br>${answer}<br><br>Did this resolve your issue?`,
-          });
-        } else {
-          return res.json({
-            reply:
-              "⚠️ I didn’t recognise that choice — please reply with the number or part of the question title.",
-          });
-        }
-      }
-
-      // First lookup
       const matches = findSupportMatches(message);
-      if (matches.length === 0)
-        return res.json({
-          reply:
-            "🤔 I couldn’t find anything matching that yet — can you describe the issue in more detail?",
-        });
-
       if (matches.length === 1) {
         s.step = "support_followup";
-        const m = matches[0];
-        const answer = m.answers.map((a, i) => `Step ${i + 1}: ${a}`).join("<br>");
+        const url =
+          matches[0].url ||
+          `https://support.rstepos.com/article/${encodeURIComponent(
+            matches[0].title.toLowerCase().replace(/\s+/g, "-")
+          )}`;
         return res.json({
-          reply: `💡 *${m.title}*<br>${answer}<br><br>Did this resolve your issue?`,
+          reply: `🔗 I think this article might help:<br><a href="${url}" target="_blank" style="color:#0b79b7;">${matches[0].title}</a><br><br>Did this resolve your issue or is there something else I can help with?`,
         });
       }
 
-      // Multiple possible matches
-      s.step = "support_select";
-      s.supportList = matches.slice(0, 5);
-      const list = s.supportList
-        .map((m, i) => `${i + 1}) ${m.title}`)
-        .join("<br>");
+      if (matches.length > 1) {
+        const links = matches
+          .map(
+            (m) =>
+              `<a href="${
+                m.url ||
+                `https://support.rstepos.com/article/${encodeURIComponent(
+                  m.title.toLowerCase().replace(/\s+/g, "-")
+                )}`
+              }" target="_blank" style="display:block;margin:4px 0;color:#0b79b7;">${m.title}</a>`
+          )
+          .join("");
+        s.step = "support_followup";
+        return res.json({
+          reply: `🔍 I found several articles that might help:<br>${links}<br>Did one of these resolve your issue?`,
+        });
+      }
+
       return res.json({
-        reply: `🔍 I found a few articles that might help:<br>${list}<br><br>Reply with the number or part of the title to see the steps.`,
+        reply:
+          "🤔 I’m not sure about that one yet — can you describe the issue in more detail? I’ll pass it to support if needed.",
       });
     }
 
-    // ✅ Sales Mode
+    // 🟢 Sales Mode (with lead capture)
     if (context === "sales") {
       if (s.step && s.step !== "none") {
         const reply = continueLeadCapture(s, message);
@@ -208,14 +182,9 @@ app.post("/api/chat", async (req, res) => {
         });
       }
 
-      const reply = await handleSalesRouting(message);
+      const reply = await handleSalesAgent(message);
       return res.json({ reply });
     }
-
-    // ✅ Default
-    return res.json({
-      reply: "💬 I’m here to help with RST EPOS, TapaPOS or TapaPay — what would you like to know?",
-    });
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
@@ -223,31 +192,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🔎 Support Finder
-// ------------------------------------------------------
-function findSupportMatches(message) {
-  const lower = message.toLowerCase();
-  const words = lower.split(/\s+/).filter((w) => w.length > 2);
-  const results = [];
-
-  for (const entry of faqsSupport) {
-    if (!entry.questions || !entry.answers) continue;
-    const allQ = entry.questions.map((q) => q.toLowerCase());
-    const score = allQ.reduce((sum, q) => {
-      const overlap = q.split(/\s+/).filter((w) => words.includes(w)).length;
-      return sum + (overlap > 0 ? 1 : 0);
-    }, 0);
-    if (score > 0)
-      results.push({
-        title: entry.title || entry.questions[0],
-        answers: entry.answers,
-      });
-  }
-  return results;
-}
-
-// ------------------------------------------------------
-// 🧩 Lead Capture
+// 🧩 Lead Capture Helper
 // ------------------------------------------------------
 function continueLeadCapture(s, message) {
   switch (s.step) {
@@ -273,11 +218,37 @@ function continueLeadCapture(s, message) {
 }
 
 // ------------------------------------------------------
-// 🛍️ Sales Routing
+// 🧠 Support FAQ Finder
 // ------------------------------------------------------
-async function handleSalesRouting(message) {
+function findSupportMatches(message) {
+  const lower = message.toLowerCase();
+  const words = lower.split(/\s+/).filter((w) => w.length > 2);
+  const results = [];
+
+  for (const entry of faqsSupport) {
+    if (!entry.questions || !entry.answers) continue;
+    const allQ = entry.questions.map((q) => q.toLowerCase());
+    const score = allQ.reduce((sum, q) => {
+      const overlap = q.split(/\s+/).filter((w) => words.includes(w)).length;
+      return sum + (overlap > 0 ? 1 : 0);
+    }, 0);
+    if (score > 0)
+      results.push({
+        title: entry.title || entry.questions[0],
+        url: entry.url || null,
+        answers: entry.answers,
+      });
+  }
+  return results.slice(0, 5);
+}
+
+// ------------------------------------------------------
+// 🛍️ Improved Sales Routing
+// ------------------------------------------------------
+async function handleSalesAgent(message) {
   const lower = message.toLowerCase();
 
+  // Strong keyword routing
   const routes = [
     { k: ["bar", "pub", "nightclub"], url: "/bar-epos.html", label: "Bar EPOS" },
     { k: ["restaurant"], url: "/hospitality-pos.html", label: "Restaurant EPOS" },
@@ -293,11 +264,11 @@ async function handleSalesRouting(message) {
 
   for (const r of routes)
     if (r.k.some((kw) => lower.includes(kw)))
-      return `🔗 You might like our <a href='${r.url}' target='_blank'>${r.label}</a> page — it covers that topic in more detail.`;
+      return `🔗 You might like our <a href='${r.url}'>${r.label}</a> page — it covers that topic in more detail.`;
 
   return (
     "💬 I can help you find the right solution — just tell me your business type (e.g. café, bar, hotel, retail, hospital).<br><br>" +
-    "Or browse all <a href='/products.html' target='_blank'>RST EPOS Products</a> to explore."
+    "Or browse all <a href='/products.html'>RST EPOS Products</a> to explore."
   );
 }
 
@@ -305,9 +276,9 @@ async function handleSalesRouting(message) {
 // 🌐 Root
 // ------------------------------------------------------
 app.get("/", (req, res) => {
-  res.send(`<h1>🚀 Tappy Brain v12.6 is Live</h1><p>Inline Support + Lead Capture Ready</p>`);
+  res.send(`<h1>🚀 Tappy Brain v12.5 Live</h1><p>Support follow-up + Sales routing active.</p>`);
 });
 
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v12.6 (Inline Support + Sales Routing) listening on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v12.5 listening on port ${PORT}`)
 );
