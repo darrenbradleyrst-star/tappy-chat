@@ -1,8 +1,6 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.6 (Ranked + Debug Logging)
-// "Tappy Brain – Sales FAQs Only (Render-safe CORS + Pill Buttons + Weighted Search)"
-// ✅ Keeps all v14.5 logic
-// ✅ Adds console debug logging for top matches
+// RST EPOS Smart Chatbot API v14.9
+// "Tappy Brain – Sales FAQs Only (Ranked Search + Yes/No Pills + Branching)"
 // =========================================
 
 import express from "express";
@@ -41,7 +39,7 @@ const allowedOrigins = [
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "http://localhost:5500",
-  "http://127.0.0.1:5500"
+  "http://127.0.0.1:5500",
 ];
 
 app.use((req, res, next) => {
@@ -90,15 +88,13 @@ try {
       (f) => f && f.title && (Array.isArray(f.steps) || f.intro)
     );
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
-  } else {
-    console.warn("⚠️ faqs_sales.json not found");
-  }
+  } else console.warn("⚠️ faqs_sales.json not found");
 } catch (err) {
   console.error("❌ Failed to load faqs_sales.json:", err);
 }
 
 // ------------------------------------------------------
-// 🔍 Smarter, Stricter Search Helper (Weighted Scoring + Debug Log)
+// 🔍 Weighted search (≥6) + debug logging
 // ------------------------------------------------------
 function findSalesMatches(message) {
   const query = (message || "").toLowerCase().trim();
@@ -109,65 +105,65 @@ function findSalesMatches(message) {
       const text = [
         faq.title || "",
         faq.intro || "",
-        ...(Array.isArray(faq.steps) ? faq.steps : [])
+        ...(Array.isArray(faq.steps) ? faq.steps : []),
       ]
         .join(" ")
         .toLowerCase();
 
       let score = 0;
-
-      // Exact title match
       if (faq.title.toLowerCase() === query) score += 10;
-
-      // Phrase match
       if (text.includes(query)) score += 6;
 
-      // Count partial word hits
       const words = query.split(/\s+/).filter((w) => w.length > 2);
       words.forEach((w) => {
-        const occurrences = (text.match(new RegExp(`\\b${w}\\b`, "g")) || []).length;
-        score += occurrences * 2;
+        const count = (text.match(new RegExp(`\\b${w}\\b`, "g")) || []).length;
+        score += count * 2;
       });
-
       return { faq, score };
     })
-    // Keep strong matches only
-    .filter((obj) => obj.score >= 6)
-    // Sort best → worst
+    .filter((r) => r.score >= 6)
     .sort((a, b) => b.score - a.score);
 
-  // Debug log: show top 5 results with scores
-  if (scored.length > 0) {
+  if (scored.length) {
     console.log(
-      `🔍 Query: "${query}" → ${scored.length} matches. Top results:`,
+      `🔍 "${query}" → ${scored.length} matches:`,
       scored
         .slice(0, 5)
         .map((r) => `${r.faq.title} (${r.score})`)
         .join(", ")
     );
-  } else {
-    console.log(`🔍 Query: "${query}" → no strong matches.`);
-  }
+  } else console.log(`🔍 "${query}" → no strong matches`);
 
-  // Return only FAQ objects
-  return scored.map((obj) => obj.faq);
+  return scored.map((r) => r.faq);
 }
 
 // ------------------------------------------------------
-// 📘 Render FAQ
+// 📘 Render FAQ (returns HTML or structured yes/no)
 // ------------------------------------------------------
 function showFAQ(entry) {
   const steps = Array.isArray(entry.steps)
     ? entry.steps.map((s, i) => `${i + 1}. ${s}`).join("<br>")
-    : entry.steps;
+    : entry.steps || "";
+
+  if (entry.next?.question) {
+    // Structured yes/no for pills
+    return {
+      type: "yesno",
+      title: entry.title,
+      intro: entry.intro || "",
+      steps,
+      question: entry.next.question,
+    };
+  }
+
   const nextPrompt = entry.next
     ? `<br><br>${entry.next.question} (Yes or No)`
     : `<br><br>👉 <a href="${entry.link || "#"}">Learn more</a>`;
-  return `📘 <strong>${entry.title}</strong><br>${entry.intro || ""}<br><br>${steps || ""}${nextPrompt}`;
+  return `📘 <strong>${entry.title}</strong><br>${entry.intro || ""}<br><br>${steps}${nextPrompt}`;
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Enhanced Exact Match + Weighted Search)
+// 💬 Chat handler (exact match + ranked search + branching)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -176,74 +172,84 @@ async function handleSalesFAQ(message, sessionId) {
   const s = sessions[sessionId];
   const lower = (message || "").toLowerCase().trim();
 
-  // ✅ Handle branching yes/no
+  // ✅ yes/no branching
   if (s.currentId) {
     const currentFAQ = faqSales.find((f) => f.id === s.currentId);
     if (currentFAQ?.next?.options) {
-      if (lower.includes("yes")) {
-        const nextId = currentFAQ.next.options.yes;
-        s.currentId = nextId;
-        return showFAQ(faqSales.find((f) => f.id === nextId));
-      } else if (lower.includes("no")) {
-        const nextId = currentFAQ.next.options.no;
-        s.currentId = nextId;
-        return showFAQ(faqSales.find((f) => f.id === nextId));
-      } else {
-        return `${currentFAQ.next.question} (Yes or No)`;
+      let nextTarget = null;
+      if (lower.includes("yes")) nextTarget = currentFAQ.next.options.yes;
+      else if (lower.includes("no")) nextTarget = currentFAQ.next.options.no;
+
+      if (nextTarget) {
+        // numeric id
+        if (typeof nextTarget === "number") {
+          const nextFAQ = faqSales.find((f) => f.id === nextTarget);
+          if (nextFAQ) {
+            s.currentId = nextFAQ.id;
+            console.log(`↪️ Branch → FAQ ${nextFAQ.id}: ${nextFAQ.title}`);
+            return showFAQ(nextFAQ);
+          }
+        }
+
+        // string id/title/url
+        if (typeof nextTarget === "string") {
+          const nextFAQ =
+            faqSales.find((f) => f.id === nextTarget) ||
+            faqSales.find(
+              (f) =>
+                f.title?.toLowerCase() === nextTarget.toLowerCase() ||
+                String(f.id) === nextTarget
+            );
+          if (nextFAQ) {
+            s.currentId = nextFAQ.id;
+            console.log(`↪️ Branch → FAQ: ${nextFAQ.title}`);
+            return showFAQ(nextFAQ);
+          }
+
+          if (/^https?:\/\//.test(nextTarget) || nextTarget.endsWith(".html")) {
+            console.log(`🌐 Branch → external: ${nextTarget}`);
+            return `👉 <a href="${nextTarget}" target="_blank">Open related page</a>`;
+          }
+        }
       }
+      return `${currentFAQ.next.question} (Yes or No)`;
     }
   }
 
-  // ✅ Step 1: Exact title match (ignore punctuation & case)
-  const normalise = (str) =>
-    (str || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
-
-  const exactMatch = faqSales.find(
-    (f) => normalise(f.title) === normalise(lower)
-  );
-
-  if (exactMatch) {
-    s.currentId = exactMatch.id;
-    console.log(`🎯 Exact match found: "${exactMatch.title}"`);
-    return showFAQ(exactMatch);
+  // ✅ exact title
+  const normalise = (t) =>
+    (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
+  if (exact) {
+    s.currentId = exact.id;
+    console.log(`🎯 Exact: ${exact.title}`);
+    return showFAQ(exact);
   }
 
-  // ✅ Step 2: Weighted fuzzy search
+  // ✅ weighted search
   const matches = findSalesMatches(message);
-
   if (matches.length === 1) {
-    const entry = matches[0];
-    s.currentId = entry.id;
-    console.log(`🎯 Single match: "${entry.title}"`);
-    return showFAQ(entry);
+    const m = matches[0];
+    s.currentId = m.id;
+    console.log(`🎯 Single: ${m.title}`);
+    return showFAQ(m);
   }
 
-  // ✅ Step 3: Multiple matches → show pill options (top 8)
   if (matches.length > 1) {
     s.awaitingChoice = true;
     s.lastFaqList = matches;
-
     const trimmed = matches.slice(0, 8);
     const options = trimmed.map((m, i) => ({
       label: m.title,
-      index: i + 1
+      index: i + 1,
     }));
-
-    console.log(
-      `🧩 Multiple matches (${matches.length}) — no exact title match. Showing top ${options.length}.`
-    );
-    return {
-      type: "options",
-      intro: "🔍 I found several possible matches:",
-      options
-    };
+    console.log(`🧩 ${matches.length} matches → showing ${options.length}`);
+    return { type: "options", intro: "🔍 I found several possible matches:", options };
   }
 
-  // ✅ Step 4: No matches
-  console.log(`🙁 No match found for "${message}"`);
+  console.log(`🙁 No match for "${message}"`);
   return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
 }
-
 
 // ------------------------------------------------------
 // 🔗 Endpoints
@@ -256,12 +262,14 @@ app.post("/api/chat", async (req, res) => {
     httpOnly: true,
     sameSite: "none",
     secure: true,
-    maxAge: 1000 * 60 * 30
+    maxAge: 1000 * 60 * 30,
   });
 
   try {
     const reply = await handleSalesFAQ(message, sessionId);
-    res.json({ reply });
+    if (typeof reply === "object" && (reply.type === "options" || reply.type === "yesno"))
+      res.json({ reply });
+    else res.json({ reply });
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
@@ -271,26 +279,22 @@ app.post("/api/chat", async (req, res) => {
 app.get("/test", (req, res) => {
   const q = req.query.q || "hardware";
   const result = findSalesMatches(q);
-  res.json({
-    query: q,
-    matches: result.map((f) => f.title),
-    count: result.length
-  });
+  res.json({ query: q, matches: result.map((f) => f.title), count: result.length });
 });
 
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.6",
-    mode: "Sales FAQ Only + Pill Buttons + Ranked Search",
+    version: "14.9",
+    mode: "Sales FAQ + Ranked Search + Yes/No Pills + Branching",
     faqs: faqSales.length,
-    time: new Date().toISOString()
+    time: new Date().toISOString(),
   });
 });
 
 // ------------------------------------------------------
-// 🚀 Start Server
+// 🚀 Start server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.6 (Ranked Search + Debug Log) running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.9 running on port ${PORT}`)
 );
