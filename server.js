@@ -419,6 +419,11 @@ async function handleSalesAgent(message, s) {
 }
 
 // ------------------------------------------------------
-app.listen(PORT, () =>
-  console.log(`🚀 Tappy Brain v12.2 (Agentic Sales + FAQ + Cache) → http://localhost:${PORT}`)
-);
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `🚀 Tappy Brain v12.2 (Agentic Sales + FAQ + Cache) listening on port ${PORT}`
+  );
+});
+
