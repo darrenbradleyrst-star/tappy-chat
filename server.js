@@ -154,62 +154,39 @@ app.post("/api/chat", async (req, res) => {
     if (["end", "exit", "close"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
-    // --------------------------
-    // SALES MODE
-    // --------------------------
-    if (context === "sales") {
-      // Handle active lead capture sequence
-      if (s.step && s.step !== "none") {
-        const reply = continueLeadCapture(s, message);
-        if (reply.complete) {
-          logJSON(salesLeadsPath, s.lead);
-          s.step = "none";
-          s.awaitingPriceConfirm = false;
-          s.stepStarted = false;
-          return res.json({
-            reply: "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
-          });
-        }
-        return res.json({ reply: reply.text });
-      }
-
-      // Detect pricing intent
-      const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
-      if (priceIntent && !s.awaitingPriceConfirm && !s.stepStarted) {
-        s.awaitingPriceConfirm = true;
-        return res.json({
-          reply: "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
-        });
-      }
-
-      // Confirm "yes"
-      if (s.awaitingPriceConfirm && /^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)$/i.test(lower)) {
-        s.awaitingPriceConfirm = false;
-        s.stepStarted = true;
-        s.step = "name";
-        s.lead = {};
-        return res.json({ reply: "🙂 Great! What’s your *name*, please?" });
-      }
-
-      // Decline "no"
-      if (s.awaitingPriceConfirm && /^(no|not now|later|maybe|n|nah)$/i.test(lower)) {
-        s.awaitingPriceConfirm = false;
-        return res.json({
-          reply: "👍 No problem — you can also check our <a href='/products.html'>Products</a> pages for more details, or ask me about a specific feature.",
-        });
-      }
-
-      // Waiting for yes/no confirmation
-      if (s.awaitingPriceConfirm) {
-        return res.json({
-          reply: "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
-        });
-      }
-
-      // Normal sales lookup
-      const reply = await handleSalesAgent(message, s);
-      return res.json({ reply });
+   // --------------------------
+// SALES MODE
+// --------------------------
+if (context === "sales") {
+  // Handle active lead capture (if any)
+  if (s.step && s.step !== "none") {
+    const reply = continueLeadCapture(s, message);
+    if (reply.complete) {
+      logJSON(salesLeadsPath, s.lead);
+      s.step = "none";
+      s.awaitingPriceConfirm = false;
+      s.stepStarted = false;
+      return res.json({
+        reply: "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
+      });
     }
+    return res.json({ reply: reply.text });
+  }
+
+  // Detect pricing or quote intent
+  const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
+  if (priceIntent) {
+    return res.json({
+      reply: `💬 We offer flexible low-monthly plans depending on your setup and card fees.<br><br>
+      📅 You can <a href="/book-a-demo.html" target="_blank">book a demo</a> and one of our team will show you detailed pricing and features.`,
+    });
+  }
+
+  // Otherwise, run the normal sales lookup
+  const reply = await handleSalesAgent(message, s);
+  return res.json({ reply });
+}
+
 
     // --------------------------
     // SUPPORT MODE
