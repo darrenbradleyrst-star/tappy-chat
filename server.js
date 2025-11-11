@@ -1,15 +1,15 @@
 // =========================================
-// RST EPOS Smart Chatbot API v15.1d
-// "Tappy Brain – Reliable Branch Stop + 90% Confidence"
+// RST EPOS Smart Chatbot API v15.2
+// "Tappy Brain – Persistent Sessions + Reliable Branching + 90% Confidence"
 // =========================================
 
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import dotenv from "dotenv";
 
 dotenv.config();
 const PORT = process.env.PORT || 3001;
@@ -18,10 +18,18 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const faqSalesPath = path.join(__dirname, "faqs_sales.json");
+const cacheDir = path.join(__dirname, "cache");
+const sessionFile = path.join(cacheDir, "sessions.json");
 
-app.set("trust proxy", 1);
+if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
+if (!fs.existsSync(sessionFile)) fs.writeFileSync(sessionFile, "{}");
+
+// ------------------------------------------------------
+// 🌐 Render-safe CORS
+// ------------------------------------------------------
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+app.set("trust proxy", 1);
 
 const allowedOrigins = [
   "https://www.rstepos.com",
@@ -43,7 +51,6 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Vary", "Origin");
     return res.status(200).end();
   }
   next();
@@ -67,7 +74,33 @@ if (fs.existsSync(faqSalesPath)) {
   faqSales = JSON.parse(fs.readFileSync(faqSalesPath, "utf8"))
     .filter((f) => f && f.title)
     .map((f) => ({ ...f, id: String(f.id) }));
-  console.log(`✅ Loaded ${faqSales.length} FAQs`);
+  console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
+}
+
+// ------------------------------------------------------
+// 🧠 Simple persistent session cache
+// ------------------------------------------------------
+function loadSessions() {
+  try {
+    return JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveSessions(sessions) {
+  fs.writeFileSync(sessionFile, JSON.stringify(sessions, null, 2));
+}
+
+function getSession(id) {
+  const sessions = loadSessions();
+  return sessions[id] || {};
+}
+
+function updateSession(id, data) {
+  const sessions = loadSessions();
+  sessions[id] = { ...(sessions[id] || {}), ...data };
+  saveSessions(sessions);
 }
 
 // ------------------------------------------------------
@@ -77,6 +110,7 @@ function showFAQ(entry) {
   const steps = Array.isArray(entry.steps)
     ? entry.steps.map((s, i) => `${i + 1}. ${s}`).join("<br>")
     : entry.steps || "";
+
   if (entry.next?.question) {
     return {
       type: "yesno",
@@ -86,23 +120,20 @@ function showFAQ(entry) {
       question: entry.next.question,
     };
   }
-  return `📘 <strong>${entry.title}</strong><br>${entry.intro || ""}<br><br>${steps}<br><br>👉 <a href="${entry.link ||
-    "#"}">Learn more</a>`;
+  return `📘 <strong>${entry.title}</strong><br>${entry.intro ||
+    ""}<br><br>${steps}<br><br>👉 <a href="${entry.link || "#"}">Learn more</a>`;
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Branch Stop Fix)
+// 💬 Chat Handler (Persistent Branch Fix)
 // ------------------------------------------------------
-const sessions = {};
-
 async function handleSalesFAQ(message, sessionId) {
-  if (!sessions[sessionId]) sessions[sessionId] = {};
-  const s = sessions[sessionId];
+  const session = getSession(sessionId);
   const lower = (message || "").toLowerCase().trim();
 
-  // ✅ 1. Handle Yes/No branch
-  if (s.currentId) {
-    const currentFAQ = faqSales.find((f) => f.id === String(s.currentId));
+  // ✅ 1. Handle Yes/No branch with persistent memory
+  if (session.currentId) {
+    const currentFAQ = faqSales.find((f) => f.id === String(session.currentId));
     if (currentFAQ?.next?.options) {
       let nextTarget = null;
       if (lower.includes("yes")) nextTarget = currentFAQ.next.options.yes;
@@ -112,13 +143,9 @@ async function handleSalesFAQ(message, sessionId) {
         const nextFAQ = faqSales.find(
           (f) => String(f.id) === String(nextTarget)
         );
-
         if (nextFAQ) {
-          s.currentId = nextFAQ.id;
-          console.log(
-            `✅ Branch success: ${lower.toUpperCase()} → ${nextFAQ.title}`
-          );
-          // 🩵 critical change: return immediately
+          updateSession(sessionId, { currentId: nextFAQ.id });
+          console.log(`✅ Branch success: ${lower.toUpperCase()} → ${nextFAQ.title}`);
           return showFAQ(nextFAQ);
         }
 
@@ -134,7 +161,7 @@ async function handleSalesFAQ(message, sessionId) {
     (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
   const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
   if (exact) {
-    s.currentId = exact.id;
+    updateSession(sessionId, { currentId: exact.id });
     return showFAQ(exact);
   }
 
@@ -164,36 +191,39 @@ async function handleSalesFAQ(message, sessionId) {
   if (!scored.length)
     return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
 
-  // ✅ 4. Auto-select if 90% confidence
+  // ✅ 4. Auto-select 90% confidence
   if (scored.length > 1) {
     const top = scored[0].score;
     const next = scored[1]?.score || 0;
     const confidence = next ? top / next : 1;
     if (confidence >= 1.9 || top >= 12) {
       const entry = scored[0].f;
-      s.currentId = entry.id;
+      updateSession(sessionId, { currentId: entry.id });
       return showFAQ(entry);
     }
   }
 
+  // ✅ 5. Single match
   if (scored.length === 1) {
     const entry = scored[0].f;
-    s.currentId = entry.id;
+    updateSession(sessionId, { currentId: entry.id });
     return showFAQ(entry);
   }
 
+  // ✅ 6. Multi-match → pill options
   const trimmed = scored.slice(0, 8);
   const options = trimmed.map((m) => ({ label: m.f.title }));
   return { type: "options", intro: "🔍 I found several possible matches:", options };
 }
 
 // ------------------------------------------------------
-// 🔗 Routes
+// 🔗 Endpoint
 // ------------------------------------------------------
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
   const sessionId =
     req.cookies.sessionId || Math.random().toString(36).substring(2, 10);
+
   res.cookie("sessionId", sessionId, {
     httpOnly: true,
     sameSite: "none",
@@ -205,11 +235,11 @@ app.post("/api/chat", async (req, res) => {
     const reply = await handleSalesFAQ(message, sessionId);
     res.json({ reply });
   } catch (err) {
-    console.error("Chat error:", err);
+    console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat unavailable" });
   }
 });
 
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v15.1d running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v15.2 running on port ${PORT}`)
 );
