@@ -353,7 +353,40 @@ async function quickSalesLookup(message) {
 }
 
 // ------------------------------------------------------
-// 🌐 Root + Health Check
+// 🧩 Lead Capture Helper — handles name → company → email → comments
+// ------------------------------------------------------
+function continueLeadCapture(s, message) {
+  switch (s.step) {
+    case "name":
+      s.lead.name = message.trim();
+      s.step = "company";
+      return { text: "🏢 Thanks! What’s your *company name*?" };
+
+    case "company":
+      s.lead.company = message.trim();
+      s.step = "email";
+      return { text: "📧 And what’s the best *email address* to send details to?" };
+
+    case "email":
+      if (!isValidEmail(message))
+        return { text: "⚠️ That email doesn’t look right — please re-enter it." };
+      s.lead.email = message.trim();
+      s.step = "comments";
+      return {
+        text: "📝 Great — any specific notes or requirements for your quote? e.g. number of terminals, printers, or card machines?",
+      };
+
+    case "comments":
+      s.lead.comments = message.trim();
+      return { complete: true };
+
+    default:
+      return { text: "💬 Please continue…" };
+  }
+}
+
+// ------------------------------------------------------
+// 🌐 Root + Health Check Endpoint
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
