@@ -33,21 +33,45 @@ const supportLogPath = path.join(__dirname, "support_log.jsonl");
 const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
-app.use(express.json());
+// ------------------------------------------------------
+// 🌐 Express / CORS / Rate Limiting Setup
+// ------------------------------------------------------
+app.set("trust proxy", 1); // ✅ Required for Render proxy (avoids X-Forwarded-For warnings)
+app.use(express.json({ limit: "1mb" })); // safer JSON parsing with size limit
+
 app.use(
   cors({
     origin: [
+      // ✅ Local dev
       "http://localhost:8080",
       "http://127.0.0.1:8080",
       "http://localhost:5500",
       "http://127.0.0.1:5500",
+
+      // ✅ Production + Staging
       "https://staging.rstepos.com",
       "https://www.rstepos.com",
+
+      // ✅ Render API itself (for self-testing or direct access)
       "https://tappy-chat.onrender.com",
     ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true,
   })
 );
-app.use(rateLimit({ windowMs: 60 * 1000, max: 40 }));
+
+// ✅ Moderate rate limit: 40 req/min per IP
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 40,
+    message: { error: "Rate limit exceeded — please wait a moment." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+
 
 // ------------------------------------------------------
 // 🧾 Utilities
