@@ -1,6 +1,6 @@
 // =========================================
-// RST EPOS Smart Chatbot API v15.1b
-// "Tappy Brain – Sales FAQs Only (Ranked Search + Yes/No Pills + Branching + Render-safe CORS + 90% Confidence)"
+// RST EPOS Smart Chatbot API v15.1c
+// "Tappy Brain – Sales FAQs Only (Ranked Search + Yes/No Pills + Reliable Branching)"
 // =========================================
 
 import express from "express";
@@ -26,7 +26,7 @@ const cacheDir = path.join(__dirname, "cache");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Render-safe CORS (fixes 502 preflight)
+// 🌐 Render-safe CORS
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
@@ -42,7 +42,6 @@ const allowedOrigins = [
   "http://127.0.0.1:5500",
 ];
 
-// ✅ 1) Early OPTIONS handler so Render proxy never blocks
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (req.method === "OPTIONS") {
@@ -59,12 +58,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ 2) Standard CORS layer
 app.use(
   cors({
     origin: (origin, cb) => {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-      return cb(null, true); // wildcard fallback for Render
+      return cb(null, true);
     },
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
@@ -81,7 +79,7 @@ try {
     const raw = JSON.parse(fs.readFileSync(faqSalesPath, "utf8"));
     faqSales = raw
       .filter((f) => f && f.title && (Array.isArray(f.steps) || f.intro))
-      .map((f) => ({ ...f, id: String(f.id) })); // ✅ force string IDs
+      .map((f) => ({ ...f, id: String(f.id) }));
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
   } else console.warn("⚠️ faqs_sales.json not found");
 } catch (err) {
@@ -89,7 +87,7 @@ try {
 }
 
 // ------------------------------------------------------
-// 🔍 Weighted search (≥6)
+// 🔍 Weighted search
 // ------------------------------------------------------
 function findSalesMatches(message) {
   const query = (message || "").toLowerCase().trim();
@@ -146,7 +144,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Strict Branch + 90% Match)
+// 💬 Chat Handler (Reliable Branch + 90% Confidence)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -163,27 +161,40 @@ async function handleSalesFAQ(message, sessionId) {
       if (lower.includes("yes")) nextTarget = currentFAQ.next.options.yes;
       else if (lower.includes("no")) nextTarget = currentFAQ.next.options.no;
 
-      console.log(`🧭 Branching from ${s.currentId} (${currentFAQ.title}) → ${lower.toUpperCase()} → ${nextTarget}`);
+      console.log(`🧭 Branch from ${s.currentId} (${currentFAQ.title}) → ${lower.toUpperCase()} → ${nextTarget}`);
 
       if (nextTarget) {
-        const nextFAQ = faqSales.find((f) => f.id === String(nextTarget));
+        const targetId = String(nextTarget).trim();
+
+        // Try ID match first
+        let nextFAQ = faqSales.find((f) => f.id === targetId);
+
+        // Fallback: match by title if the nextTarget is a string title
+        if (!nextFAQ) {
+          nextFAQ = faqSales.find(
+            (f) => f.title.toLowerCase().trim() === targetId.toLowerCase()
+          );
+        }
+
+        // Fallback: external URL
+        if (!nextFAQ && targetId.includes(".html")) {
+          console.log(`🌐 Branch external → ${targetId}`);
+          return `👉 <a href="${targetId}" target="_blank">View related page</a>`;
+        }
+
         if (nextFAQ) {
-          s.currentId = String(nextFAQ.id);
-          console.log(`✅ Branch found: ${nextFAQ.id} → ${nextFAQ.title}`);
+          s.currentId = nextFAQ.id;
+          console.log(`✅ Branch success → ${nextFAQ.id}: ${nextFAQ.title}`);
           return showFAQ(nextFAQ);
         }
-        if (typeof nextTarget === "string" && nextTarget.includes(".html")) {
-          console.log(`🌐 Branch external link → ${nextTarget}`);
-          return `👉 <a href="${nextTarget}" target="_blank">View related page</a>`;
-        }
-      }
 
-      console.warn(`⚠️ nextTarget "${nextTarget}" not found`);
-      return `${currentFAQ.next.question} (Yes or No)`;
+        console.warn(`⚠️ Branch target "${targetId}" not found`);
+        return `${currentFAQ.next.question} (Yes or No)`;
+      }
     }
   }
 
-  // ✅ 2. Exact match
+  // ✅ 2. Exact title match
   const normalise = (t) => (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
   const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
   if (exact) {
@@ -199,7 +210,7 @@ async function handleSalesFAQ(message, sessionId) {
     return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
   }
 
-  // ✅ 4. Auto-select high-confidence (≥90%)
+  // ✅ 4. High-confidence (≥90%)
   if (scored.length > 1) {
     const top = scored[0].score;
     const next = scored[1]?.score || 0;
@@ -212,7 +223,7 @@ async function handleSalesFAQ(message, sessionId) {
     }
   }
 
-  // ✅ 5. Single match
+  // ✅ 5. Single strong match
   if (scored.length === 1) {
     const entry = scored[0];
     s.currentId = entry.id;
@@ -220,7 +231,7 @@ async function handleSalesFAQ(message, sessionId) {
     return showFAQ(entry);
   }
 
-  // ✅ 6. Multiple matches → pill options
+  // ✅ 6. Multi-match → pill options
   const trimmed = scored.slice(0, 8);
   const options = trimmed.map((m, i) => ({ label: m.title, index: i + 1 }));
   console.log(`🧩 Multiple matches (${scored.length})`);
@@ -254,7 +265,7 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) =>
   res.json({
     status: "ok",
-    version: "15.1b",
+    version: "15.1c",
     mode: "Sales FAQ + Ranked + Branching + 90% Confidence",
     faqs: faqSales.length,
     time: new Date().toISOString(),
@@ -262,8 +273,8 @@ app.get("/", (req, res) =>
 );
 
 // ------------------------------------------------------
-// 🚀 Start server
+// 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v15.1b running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v15.1c running on port ${PORT}`)
 );
