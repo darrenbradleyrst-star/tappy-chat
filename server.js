@@ -163,7 +163,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Improved Yes/No Branching + 90% Auto-Select)
+// 💬 Chat Handler v15.1 (Fixed Branch Logic + Confidence Search)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -172,49 +172,58 @@ async function handleSalesFAQ(message, sessionId) {
   const s = sessions[sessionId];
   const lower = (message || "").toLowerCase().trim();
 
-  // ✅ Branch: Handle "Yes / No" response if current FAQ has next options
+  // ✅ 1. Handle branching “Yes / No” FIRST
   if (s.currentId) {
     const currentFAQ = faqSales.find((f) => f.id === s.currentId);
     if (currentFAQ?.next?.options) {
-      let nextRef = null;
-      if (lower.includes("yes")) nextRef = currentFAQ.next.options.yes;
-      else if (lower.includes("no")) nextRef = currentFAQ.next.options.no;
+      let nextTarget = null;
+      if (lower === "yes" || lower.includes("yes")) {
+        nextTarget = currentFAQ.next.options.yes;
+      } else if (lower === "no" || lower.includes("no")) {
+        nextTarget = currentFAQ.next.options.no;
+      }
 
-      if (nextRef) {
-        // If it's a numeric or string ID → find matching FAQ
+      if (nextTarget) {
+        // 🔹 Numeric or string ID (internal FAQ)
         const nextFAQ =
-          faqSales.find((f) => f.id === nextRef) ||
-          faqSales.find((f) => String(f.id) === String(nextRef)) ||
-          faqSales.find((f) => f.title?.toLowerCase() === String(nextRef).toLowerCase());
+          faqSales.find((f) => String(f.id) === String(nextTarget)) ||
+          faqSales.find(
+            (f) =>
+              f.title &&
+              f.title.toLowerCase().trim() ===
+                String(nextTarget).toLowerCase().trim()
+          );
 
         if (nextFAQ) {
           s.currentId = nextFAQ.id;
-          console.log(`↪️ Branch → ${lower.toUpperCase()} → ${nextFAQ.title}`);
+          console.log(`↪️ Branch success → ${lower.toUpperCase()} → FAQ ${nextFAQ.id}: ${nextFAQ.title}`);
           return showFAQ(nextFAQ);
         }
 
-        // External link fallback (if not an internal FAQ)
-        if (typeof nextRef === "string" && nextRef.startsWith("/")) {
-          console.log(`🌐 Branch → external link: ${nextRef}`);
-          return `👉 <a href="${nextRef}" target="_blank">View related info</a>`;
+        // 🔹 External link (HTML page or URL)
+        if (typeof nextTarget === "string" && nextTarget.includes(".html")) {
+          console.log(`🌐 Branch external → ${nextTarget}`);
+          return `👉 <a href="${nextTarget}" target="_blank">Open related page</a>`;
         }
       }
 
       // If no valid next target found
+      console.warn(`⚠️ Branch failed for "${lower}" → staying on same FAQ`);
       return `${currentFAQ.next.question} (Yes or No)`;
     }
   }
 
-  // ✅ Exact match (case-insensitive)
-  const normalise = (str) => (str || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
+  // ✅ 2. Exact match check
+  const normalise = (str) =>
+    (str || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
   const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
   if (exact) {
     s.currentId = exact.id;
-    console.log(`🎯 Exact match found: "${exact.title}"`);
+    console.log(`🎯 Exact title match: ${exact.title}`);
     return showFAQ(exact);
   }
 
-  // ✅ Weighted ranking search
+  // ✅ 3. Weighted fuzzy search
   const scored = faqSales
     .map((faq) => {
       const text = [
@@ -240,42 +249,41 @@ async function handleSalesFAQ(message, sessionId) {
     .filter((r) => r.score >= 6)
     .sort((a, b) => b.score - a.score);
 
+  // ✅ 4. No matches
   if (!scored.length) {
-    console.log(`🙁 No matches for "${message}"`);
+    console.log(`🙁 No results for "${message}"`);
     return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
   }
 
-  // ✅ Confidence check → Auto-select top match if strong
+  // ✅ 5. High-confidence auto-select (≥90%)
   if (scored.length > 1) {
     const top = scored[0].score;
     const next = scored[1]?.score || 0;
     const confidence = next > 0 ? top / next : 1;
-
-    console.log(`📊 Confidence: top=${top}, next=${next}, ratio=${confidence.toFixed(2)}`);
-
     if (confidence >= 1.9 || top >= 12) {
       const entry = scored[0].faq;
       s.currentId = entry.id;
-      console.log(`🤖 Auto-selected: ${entry.title}`);
+      console.log(`🤖 Auto-selected high-confidence: ${entry.title}`);
       return showFAQ(entry);
     }
   }
 
-  // ✅ Single match
+  // ✅ 6. Single strong match
   if (scored.length === 1) {
     const entry = scored[0].faq;
     s.currentId = entry.id;
+    console.log(`🎯 Single strong match: ${entry.title}`);
     return showFAQ(entry);
   }
 
-  // ✅ Multiple matches → show pill buttons
+  // ✅ 7. Multi-match → pill options
   const trimmed = scored.slice(0, 8);
   const options = trimmed.map((m, i) => ({
     label: m.faq.title,
     index: i + 1,
   }));
 
-  console.log(`🧩 Multiple matches (${scored.length}), showing pill buttons.`);
+  console.log(`🧩 Multiple matches (${scored.length}), showing top ${options.length}`);
   return {
     type: "options",
     intro: "🔍 I found several possible matches:",
