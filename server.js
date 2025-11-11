@@ -1,7 +1,7 @@
 // =========================================
-// RST EPOS Smart Chatbot API v12.2 ("Tappy Brain + Agentic Sales Context")
-// ✅ Context-aware Sales mode with multi-page sitemap search
-// ✅ Support mode lists multiple matching FAQs as options
+// RST EPOS Smart Chatbot API v12.3 ("Tappy Brain + Agentic Context + Multi-match")
+// ✅ Support mode: shows multiple matching FAQs as clickable links
+// ✅ Sales mode: shows multiple matching pages as HTML links
 // ✅ Clean structure, Render-ready
 // =========================================
 
@@ -28,8 +28,6 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const cacheDir = path.join(__dirname, "cache");
-const supportLogPath = path.join(__dirname, "support_log.jsonl");
-const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
@@ -66,14 +64,6 @@ app.use(
 );
 
 // ------------------------------------------------------
-// 🧾 Utilities
-// ------------------------------------------------------
-const logJSON = (file, data) =>
-  fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
-const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-
-// ------------------------------------------------------
 // 📚 Load Support FAQs + Cache
 // ------------------------------------------------------
 const faqsSupportPath = path.join(__dirname, "faqs_support.json");
@@ -82,7 +72,9 @@ try {
   if (fs.existsSync(faqsSupportPath)) {
     faqsSupport = JSON.parse(fs.readFileSync(faqsSupportPath, "utf8"));
     console.log(`✅ Loaded ${faqsSupport.length} support FAQ entries`);
-  } else console.warn("⚠️ faqs_support.json not found");
+  } else {
+    console.warn("⚠️ faqs_support.json not found");
+  }
 } catch (err) {
   console.error("❌ Failed to load faqs_support.json:", err);
 }
@@ -139,7 +131,7 @@ async function fetchSiteText(url) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat route with multi-match support
+// 💬 Chat Route with Multi-Match Links
 // ------------------------------------------------------
 const sessions = {};
 
@@ -148,7 +140,6 @@ app.post("/api/chat", async (req, res) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
   if (reset) {
-    console.log("♻️ Session reset request received.");
     sessions[ip] = { step: "none", module: "General", lead: {} };
     return res.json({ reply: "Session reset OK." });
   }
@@ -164,14 +155,17 @@ app.post("/api/chat", async (req, res) => {
     if (["end chat", "close", "exit"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
+    // 🟢 SALES MODE
     if (context === "sales") {
       const reply = await handleSalesAgent(message, s);
       return res.json({ reply });
     }
 
+    // 🟣 SUPPORT / GENERAL MODE
     if (context === "support" || context === "general") {
       const matches = findMultipleSupportFAQs(message);
 
+      // One match → show full answer
       if (matches.length === 1) {
         const reply = matches[0].answers.join("<br>");
         supportCache[message] = reply;
@@ -179,17 +173,22 @@ app.post("/api/chat", async (req, res) => {
         return res.json({ reply });
       }
 
+      // Multiple matches → show article links
       if (matches.length > 1) {
-        const buttons = matches
+        const links = matches
           .slice(0, 5)
-          .map(
-            (m, i) =>
-              `<button class="cb-opt" data-context="support" data-choice="${i}">${m.title || `Option ${i + 1}`}</button>`
-          )
+          .map((m, i) => {
+            const title = m.title || m.questions?.[0] || `Article ${i + 1}`;
+            const url =
+              m.url ||
+              `https://support.rstepos.com/article/${encodeURIComponent(
+                title.toLowerCase().replace(/\s+/g, "-")
+              )}`;
+            return `<a href="${url}" target="_blank" style="display:block;margin:4px 0;color:#0b79b7;">${title}</a>`;
+          })
           .join("");
         return res.json({
-          reply:
-            `🔍 I found several articles that might help:<br><div class='cb-options'>${buttons}</div>`,
+          reply: `🔍 I found several articles that might help:<br>${links}`,
         });
       }
 
@@ -205,7 +204,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🧠 Support Multi-Match Finder
+// 🧠 Support Multi-Match Finder (with title + URL)
 // ------------------------------------------------------
 function findMultipleSupportFAQs(message) {
   const lower = message.toLowerCase();
@@ -220,14 +219,20 @@ function findMultipleSupportFAQs(message) {
       const overlap = qWords.filter((w) => words.includes(w)).length;
       return sum + (overlap > 0 ? 1 : 0);
     }, 0);
-    if (score > 0) results.push(entry);
+    if (score > 0) {
+      results.push({
+        title: entry.title || entry.questions[0],
+        url: entry.url || null,
+        answers: entry.answers,
+      });
+    }
   }
 
   return results.slice(0, 5);
 }
 
 // ------------------------------------------------------
-// 🛍️ Agentic Sales Assistant with Sitemap awareness
+// 🛍️ Agentic Sales Assistant (Links instead of buttons)
 // ------------------------------------------------------
 async function handleSalesAgent(message, s) {
   const lower = message.toLowerCase();
@@ -240,12 +245,9 @@ async function handleSalesAgent(message, s) {
     { k: ["payment", "tapapay", "card"], r: "/integrated-payments.html", l: "TapaPay Payments" },
     { k: ["hardware", "terminal", "till"], r: "/hardware.html", l: "POS Hardware" },
   ];
-
-  for (const q of quick) {
-    if (q.k.some((kw) => lower.includes(kw))) {
+  for (const q of quick)
+    if (q.k.some((kw) => lower.includes(kw)))
       return `🔗 You might like our <a href='${q.r}'>${q.l}</a> page — it covers that topic in more detail.`;
-    }
-  }
 
   // Sitemap contextual search
   try {
@@ -270,17 +272,17 @@ async function handleSalesAgent(message, s) {
     }
 
     if (scores.length > 1) {
-      const choices = scores
+      const links = scores
         .slice(0, 5)
         .map(
           (s) =>
-            `<button class="cb-opt" data-context="sales" data-choice="${s.url}">${path
+            `<a href='${s.url}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${path
               .basename(s.url)
               .replace(/[-_]/g, " ")
-              .replace(".html", "")}</button>`
+              .replace(".html", "")}</a>`
         )
         .join("");
-      return `💡 I found a few pages mentioning that:<br><div class='cb-options'>${choices}</div>`;
+      return `💡 I found a few pages mentioning that:<br>${links}`;
     }
   } catch (err) {
     console.warn("⚠️ Sitemap search failed:", err);
@@ -297,12 +299,12 @@ async function handleSalesAgent(message, s) {
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.send(`
-    <h1>🚀 Tappy Brain v12.2 is Live</h1>
+    <h1>🚀 Tappy Brain v12.3 is Live</h1>
     <p>Your chatbot API is running successfully on Render.</p>
     <p>Try POST /api/chat with {"message":"hello"}</p>
   `);
 });
 
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v12.2 listening on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v12.3 listening on port ${PORT}`)
 );
