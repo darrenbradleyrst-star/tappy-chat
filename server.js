@@ -192,52 +192,66 @@ ${pages.map((p, i) => `Page ${i + 1}: ${p.url}\n${p.text}`).join("\n\n")}
 }
 
 // ------------------------------------------------------
-// 🧩 Support Logic
+// 🧩 Support Logic (fixed selection handling)
 // ------------------------------------------------------
 async function handleSupportAgent(message, sessionId) {
-  const s = sessions[sessionId] || {};
-  const matches = findSupportMatches(message);
+  // Ensure we always have a real session object reference
+  if (!sessions[sessionId]) sessions[sessionId] = {};
+  const s = sessions[sessionId];
 
-  // Select a numbered FAQ
-  if (s.awaitingFaqChoice && /^\d+$/.test(message.trim())) {
-    const idx = parseInt(message.trim(), 10) - 1;
+  const matches = findSupportMatches(message);
+  const lowerMsg = (message || "").toLowerCase().trim();
+
+  // ✅ If user replies with a number (selecting an FAQ)
+  if (s.awaitingFaqChoice && /^\d+$/.test(lowerMsg)) {
+    const idx = parseInt(lowerMsg, 10) - 1;
     const list = s.lastFaqList || [];
+
     if (list[idx]) {
       const entry = list[idx];
+      // Clear selection state
       s.awaitingFaqChoice = false;
       s.lastFaqList = null;
+
       const title = entry.title || entry.questions?.[0] || "Help Article";
+      sessions[sessionId] = s; // ✅ persist updated session
       return `📘 <strong>${title}</strong><br>${entry.answers.join("<br>")}<br><br>Did that resolve your issue?`;
     }
+
+    // Invalid number → re-prompt
+    return `⚠️ Please enter a valid number from the list above.`;
   }
 
-  // Single match
+  // ✅ If exactly one FAQ matched
   if (matches.length === 1) {
     const m = matches[0];
     const title = m.title || m.questions?.[0] || "Help Article";
     return `📘 <strong>${title}</strong><br>${m.answers.join("<br>")}<br><br>Did that resolve your issue?`;
   }
 
-  // Multiple matches
+  // ✅ If multiple matches → show list and store it
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
+    sessions[sessionId] = s; // ✅ persist session with pending list
+
     const numbered = matches
       .map((m, i) => `${i + 1}. ${m.title || m.questions?.[0] || "Help Article"}`)
       .join("<br>");
     return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
 
-  // No match — use OpenAI site search fallback
+  // ❌ No FAQ match → use OpenAI fallback
   const aiResult = await aiSearchSite(message);
   if (aiResult) return aiResult;
 
-  // Still nothing
+  // Final fallback
   return `🙁 I couldn’t find an exact match.<br><br>
 Would you like to:<br>
 👉 <a href="/contact-us.html" target="_blank">Contact Support</a><br>
 💡 or <a href="/support.html" target="_blank">Browse the FAQ Library</a>?`;
 }
+
 
 // ------------------------------------------------------
 // 🛍️ Sales Agent (price intent)
