@@ -1,8 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.3b
+// RST EPOS Smart Chatbot API v14.3b (Updated)
 // "Tappy Brain – Sales FAQs Only (Debug + Improved Matching)"
 // ✅ Render-safe CORS (fixes 502 preflight)
-// ✅ Loads faq_sales.json only
+// ✅ Loads faqs_sales.json only
 // ✅ Searches title, intro, and steps (no keywords needed)
 // ✅ Supports branching logic ("next" → yes/no)
 // ✅ Adds /test?q= route for live search checking
@@ -26,7 +26,7 @@ const app = express();
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const faqSalesPath = path.join(__dirname, "faq_sales.json");
+const faqSalesPath = path.join(__dirname, "faqs_sales.json"); // ✅ updated filename
 const cacheDir = path.join(__dirname, "cache");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
@@ -104,9 +104,9 @@ try {
     );
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
     console.log("🧠 First FAQ entry preview:", faqSales[0]);
-  } else console.warn("⚠️ faq_sales.json not found");
+  } else console.warn("⚠️ faqs_sales.json not found");
 } catch (err) {
-  console.error("❌ Failed to load faq_sales.json:", err);
+  console.error("❌ Failed to load faqs_sales.json:", err);
 }
 
 // ------------------------------------------------------
