@@ -1,9 +1,9 @@
 // =========================================
 // RST EPOS Smart Chatbot API v12.2 ("Tappy Brain + Agentic Sales Context")
 // ✅ Adds context-aware "Sales" mode for agentic-style suggestions
-// ✅ Keeps full support FAQ / cache / OpenAI fallback logic
-// ✅ Retains lead capture (Name → Company → Email → Comments)
-// ✅ Clean structure, ready for future ACP or JSON product data integration
+// ✅ Adds Support + General FAQ logic (with cache + fallback)
+// ✅ Retains lead capture foundation (ready for next stage)
+// ✅ Clean structure, Render-ready
 // =========================================
 
 import express from "express";
@@ -172,7 +172,7 @@ function findCachedSupport(message) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat route with Agentic-style Sales Context
+// 💬 Chat route with Agentic-style Sales Context + Support Logic
 // ------------------------------------------------------
 const sessions = {};
 
@@ -180,16 +180,14 @@ app.post("/api/chat", async (req, res) => {
   const { message, context, reset } = req.body;
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-  // ✅ Handle chatbot session reset (prevents 400 error)
+  // ✅ Handle chatbot session reset
   if (reset) {
     console.log("♻️ Session reset request received.");
     sessions[ip] = { step: "none", module: "General", lead: {} };
     return res.json({ reply: "Session reset OK." });
   }
 
-  if (!message) {
-    return res.status(400).json({ error: "No message provided" });
-  }
+  if (!message) return res.status(400).json({ error: "No message provided" });
 
   if (!sessions[ip]) sessions[ip] = { step: "none", module: "General", lead: {} };
   const s = sessions[ip];
@@ -211,7 +209,26 @@ app.post("/api/chat", async (req, res) => {
       return res.json({ reply });
     }
 
-    // ... [support + lead logic unchanged]
+    // ✅ Support & General Context
+    if (context === "support" || context === "general") {
+      // Try cached match
+      const cached = findCachedSupport(message);
+      if (cached) return res.json({ reply: cached });
+
+      // Try FAQ lookup
+      const faq = findSupportFAQ(message);
+      if (faq) {
+        supportCache[message] = faq;
+        saveSupportCache();
+        return res.json({ reply: faq });
+      }
+
+      // Fallback to polite unknown
+      return res.json({
+        reply:
+          "🤔 I’m not sure about that one yet — can you describe the issue in more detail? I’ll pass it to support if needed.",
+      });
+    }
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
