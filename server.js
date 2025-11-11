@@ -1,12 +1,9 @@
 // =========================================
-// RST EPOS Smart Chatbot API v12.1 ("Tappy Brain")
-// ✅ Sales intent → Lead capture (Name → Company → Email → Comments)
-// ✅ FAQ → Cache → OpenAI fallback order
-// ✅ Displays answer source (FAQ / Cache / OpenAI)
-// ✅ Working Yes/No + Start New Question / End Chat
-// ✅ Cleans 404 text before OpenAI context
-// ✅ Fixes false sales trigger on support queries
-// ✅ Render-ready version (dynamic PORT +/ route)
+// RST EPOS Smart Chatbot API v12.2 ("Tappy Brain + Agentic Sales Context")
+// ✅ Adds context-aware "Sales" mode for agentic-style suggestions
+// ✅ Keeps full support FAQ / cache / OpenAI fallback logic
+// ✅ Retains lead capture (Name → Company → Email → Comments)
+// ✅ Clean structure, ready for future ACP or JSON product data integration
 // =========================================
 
 import express from "express";
@@ -23,9 +20,12 @@ import fs from "fs";
 
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3001; // ✅ dynamic for Render
+const PORT = 3001;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// ------------------------------------------------------
+// 📁 Paths and setup
+// ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const cacheDir = path.join(__dirname, "cache");
@@ -42,19 +42,10 @@ app.use(
       "http://localhost:5500",
       "http://127.0.0.1:5500",
       "https://staging.rstepos.com",
-      "https://rstepos.com",
-      "https://tappy-chat.onrender.com", // ✅ add your live API host
     ],
   })
 );
 app.use(rateLimit({ windowMs: 60 * 1000, max: 40 }));
-
-// ------------------------------------------------------
-// ✅ Root route for Render
-// ------------------------------------------------------
-app.get("/", (req, res) => {
-  res.send("✅ Tappy Chatbot API v12.1 is running on Render!");
-});
 
 // ------------------------------------------------------
 // 🧾 Utilities
@@ -62,6 +53,8 @@ app.get("/", (req, res) => {
 const logJSON = (file, data) =>
   fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...data }) + "\n");
 const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
 function formatReplyText(text) {
   if (!text) return "";
   return text
@@ -71,7 +64,6 @@ function formatReplyText(text) {
     .replace(/(<br>\s*){2,}/g, "<br>")
     .trim();
 }
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
 // 📚 Load Support FAQs + Cache
@@ -102,7 +94,7 @@ function saveSupportCache() {
 }
 
 // ------------------------------------------------------
-// 🔍 Hybrid FAQ matcher
+// 🔍 FAQ + Cache Matchers
 // ------------------------------------------------------
 function findSupportFAQ(message) {
   const lower = message.toLowerCase().trim();
@@ -141,7 +133,6 @@ function findSupportFAQ(message) {
       if (bestMatch) break;
     }
   }
-
   return bestMatch ? bestMatch.answers.join("<br>") : null;
 }
 
@@ -162,7 +153,7 @@ function findCachedSupport(message) {
 }
 
 // ------------------------------------------------------
-// 🔍 Sitemap loader + fallback (manual HTML list for staging)
+// 🔍 Sitemap + Content Fetcher (for OpenAI context)
 // ------------------------------------------------------
 async function getSitemapUrls(sitemapUrl = "https://staging.rstepos.com/sitemap.xml") {
   try {
@@ -172,57 +163,15 @@ async function getSitemapUrls(sitemapUrl = "https://staging.rstepos.com/sitemap.
     if (parsed.urlset?.url)
       return parsed.urlset.url.map((u) => u.loc?.[0]).filter(Boolean);
   } catch {}
-
   return [
-  "https://staging.rstepos.com/",
-  "https://staging.rstepos.com/index.html",
-  "https://staging.rstepos.com/tapapos.html",
-  "https://staging.rstepos.com/tapapay.html",
-  "https://staging.rstepos.com/tapaoffice.html",
-  "https://staging.rstepos.com/iwantfed-online-ordering.html",
-  "https://staging.rstepos.com/giveavoucher.html",
-  "https://staging.rstepos.com/tapatable.html",
-  "https://staging.rstepos.com/back-office-software.html",
-  "https://staging.rstepos.com/pos-software.html",
-  "https://staging.rstepos.com/integrated-payments.html",
-  "https://staging.rstepos.com/hospitality-pos.html",
-  "https://staging.rstepos.com/retail-pos.html",
-  "https://staging.rstepos.com/restaurant-pos.html",
-  "https://staging.rstepos.com/bar-pos.html",
-  "https://staging.rstepos.com/cafe-coffee-shop-pos.html",
-  "https://staging.rstepos.com/bakery-pos.html",
-  "https://staging.rstepos.com/fastfood-pizza-pos.html",
-  "https://staging.rstepos.com/convenience-store-pos.html",
-  "https://staging.rstepos.com/farm-shop-pos.html",
-  "https://staging.rstepos.com/food-truck-pos.html",
-  "https://staging.rstepos.com/festival-events-pos.html",
-  "https://staging.rstepos.com/hotel-pos.html",
-  "https://staging.rstepos.com/protel-pms-hotel-software.html",
-  "https://staging.rstepos.com/hospital-clinic-pos.html",
-  "https://staging.rstepos.com/members-clubs-pos.html",
-  "https://staging.rstepos.com/school-education-university-pos.html",
-  "https://staging.rstepos.com/mobile-pos.html",
-  "https://staging.rstepos.com/off-sales-pos.html",
-  "https://staging.rstepos.com/stadium-pos.html",
-  "https://staging.rstepos.com/gift-shop-pos.html",
-  "https://staging.rstepos.com/book-a-demo.html",
-  "https://staging.rstepos.com/case-studies.html",
-  "https://staging.rstepos.com/resources.html",
-  "https://staging.rstepos.com/support.html",
-  "https://staging.rstepos.com/help.html",
-  "https://staging.rstepos.com/privacy-policy.html",
-  "https://staging.rstepos.com/cookie-policy.html",
-  "https://staging.rstepos.com/terms.html",
-  "https://staging.rstepos.com/pci.html",
-  "https://staging.rstepos.com/contact-us.html",
-  "https://staging.rstepos.com/hardware.html",
-  "https://staging.rstepos.com/kitchen-display-system.html",
-  "https://staging.rstepos.com/table-reservations-software.html",
-  "https://staging.rstepos.com/membership-app.html",
-  "https://staging.rstepos.com/at-table-ordering.html",
-  "https://staging.rstepos.com/stock-control-software.html",
-  "https://staging.rstepos.com/digital-gift-vouchers.html"
-];
+    "https://staging.rstepos.com/",
+    "https://staging.rstepos.com/pos-software.html",
+    "https://staging.rstepos.com/hospitality-pos.html",
+    "https://staging.rstepos.com/retail-pos.html",
+    "https://staging.rstepos.com/integrated-payments.html",
+    "https://staging.rstepos.com/giveavoucher.html",
+    "https://staging.rstepos.com/book-a-demo.html",
+  ];
 }
 
 async function fetchSiteText(url) {
@@ -249,21 +198,189 @@ async function fetchSiteText(url) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat route
+// 💬 Chat route with Agentic-style Sales Context
 // ------------------------------------------------------
 const sessions = {};
+
 app.post("/api/chat", async (req, res) => {
-  const { message } = req.body;
+  const { message, context } = req.body;
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   if (!message) return res.status(400).json({ error: "No message provided" });
+
   if (!sessions[ip]) sessions[ip] = { step: "none", module: "General", lead: {} };
   const s = sessions[ip];
   const lower = message.toLowerCase().trim();
 
   try {
-    // (💬 keep your entire original chatbot logic here — unchanged)
-    // ... existing logic already handles sales, FAQ, cache, and OpenAI fallback ...
-    // ✅ nothing else to edit
+    // ------------------------------------------------------
+    // 🔁 Reset / End / Restart
+    // ------------------------------------------------------
+    if (["start new question", "new question", "restart"].includes(lower)) {
+      s.step = "none";
+      return res.json({ reply: "✅ No problem — please type your new question below." });
+    }
+    if (["end chat", "close", "exit"].includes(lower)) {
+      sessions[ip] = { step: "none", module: "General", lead: {} };
+      return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
+    }
+
+    // ======================================================
+    // 💼 SALES CONTEXT — Agentic-style mode
+    // ======================================================
+    if (context === "sales") {
+      const reply = await handleSalesAgent(message, s);
+      return res.json({ reply });
+    }
+
+    // ======================================================
+    // 🧰 SUPPORT CONTEXT — Existing logic
+    // ======================================================
+    const salesKeywords =
+      /\b(price|cost|quote|quotation|pricing|rate|fee|buy|purchase|demo|package|plan|monthly|hardware|how much|what'?s the price|subscribe|subscription|order|get started|sign up|trial|tapapay rates?|processing fees?)\b/i;
+    const supportKeywords =
+      /\b(error|issue|problem|not working|failed|cannot|won'?t|stopped|help|support|troubleshoot|fix|repair|connect|login|setup|install|configure|update|printer|display|ped|terminal|card machine|device|screen)\b/i;
+
+    const isSalesIntent = salesKeywords.test(message) && !supportKeywords.test(message);
+    const isSupportIntent = supportKeywords.test(message);
+
+    if (isSupportIntent && supportCache[message]) {
+      delete supportCache[message];
+      saveSupportCache();
+    }
+
+    // Lead capture (unchanged)
+    if (isSalesIntent) {
+      s.step = "sales_offer";
+      return res.json({
+        reply:
+          "💡 The pricing for our RST EPOS products can vary depending on your setup and business type.<br><br>" +
+          "Would you like to provide your details so we can prepare a tailored quote?<br>" +
+          `<div class='cb-yesno'>
+             <button class='cb-btn-yes'>Yes</button>
+             <button class='cb-btn-no'>No</button>
+           </div>`,
+      });
+    }
+
+    if (s.step === "sales_offer" && lower === "yes") {
+      s.step = "sales_name";
+      return res.json({
+        reply:
+          "Great! Let’s get a few quick details to prepare your quote.<br><br>" +
+          "What’s your <strong>name</strong> so we can include it on the quotation?",
+      });
+    }
+    if (s.step === "sales_offer" && lower === "no") {
+      s.step = "none";
+      return res.json({
+        reply: "👍 No problem! You can ask me anytime if you’d like a quote or demo.<br>Anything else?",
+      });
+    }
+    if (s.step === "sales_name") {
+      s.lead.name = message;
+      s.step = "sales_company";
+      return res.json({ reply: `Thanks ${message}! What’s your <strong>company name</strong>?` });
+    }
+    if (s.step === "sales_company") {
+      s.lead.company = message;
+      s.step = "sales_email";
+      return res.json({
+        reply: "Great — and what’s your <strong>email address</strong>? (we’ll send your quote there)",
+      });
+    }
+    if (s.step === "sales_email") {
+      if (!isValidEmail(message)) {
+        return res.json({
+          reply: "⚠️ That doesn’t look like a valid email address. Could you double-check it?",
+        });
+      }
+      s.lead.email = message;
+      s.step = "sales_comments";
+      return res.json({
+        reply: "Perfect — lastly, any <strong>comments or requirements</strong> for your quote?",
+      });
+    }
+    if (s.step === "sales_comments") {
+      s.lead.comments = message;
+      fs.appendFileSync(
+        salesLeadsPath,
+        JSON.stringify({ time: new Date().toISOString(), ...s.lead }) + "\n"
+      );
+      s.step = "none";
+      return res.json({
+        reply:
+          `✅ Thanks ${s.lead.name}! Your quote request has been logged.<br>` +
+          `Our team will contact you shortly at <strong>${s.lead.email}</strong>.<br><br>` +
+          "Would you like to ask about anything else?",
+      });
+    }
+
+    // ------------------------------------------------------
+    // 💬 Local FAQ → Cache → OpenAI
+    // ------------------------------------------------------
+    let reply = "";
+    let source = "";
+
+    const localFAQ = findSupportFAQ(message);
+    if (localFAQ) {
+      reply = formatReplyText(localFAQ);
+      source = "FAQs";
+      s.step = "support_followup";
+    } else {
+      const cached = findCachedSupport(message);
+      if (cached && !cached.toLowerCase().includes("pricing")) {
+        reply = formatReplyText(cached);
+        source = "Cache";
+        s.step = "support_followup";
+      } else {
+        const urls = await getSitemapUrls();
+        const manual = `
+TapaPOS — till and hardware system for RST EPOS.
+TapaOffice — cloud back office for setup, reporting and stock management.
+TapaPay — integrated payment service with next-day payouts and unified support.
+GiveaVoucher — sell and manage digital gift vouchers online.
+iWantFed — online ordering platform linked directly to TapaPOS.
+TapaTable — manage table bookings and reservations from the POS.`;
+
+        const siteTexts = await Promise.all(urls.map(fetchSiteText));
+        let combined = (manual + "\n\n" + siteTexts.join("\n\n---\n\n"))
+          .replace(/\b404\b/gi, "")
+          .replace(/error\s*404/gi, "")
+          .replace(/page not found/gi, "")
+          .replace(/not\s*found/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .trim()
+          .slice(0, 24000);
+
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          temperature: 0.5,
+          max_tokens: 250,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Tappy, the helpful RST EPOS assistant. Respond conversationally and clearly. Offer troubleshooting or explanations where possible.",
+            },
+            { role: "user", content: `Context:\n${combined}\n\nUser:\n${message}` },
+          ],
+        });
+
+        reply = formatReplyText(completion.choices[0].message.content.trim());
+        supportCache[message] = reply;
+        saveSupportCache();
+        source = "OpenAI";
+        s.step = "support_followup";
+      }
+    }
+
+    reply +=
+      `<br><br><small>📘 Source: ${source}</small><br><br>` +
+      "Did that resolve your issue?<br>" +
+      `<div class='cb-yesno'><button class='cb-btn-yes'>Yes</button>` +
+      `<button class='cb-btn-no'>No</button></div>`;
+
+    res.json({ reply });
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
@@ -271,8 +388,37 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🚀 Start server (Render-compatible)
+// 🛍️ Agentic-style Sales Assistant (non-transactional)
+// ------------------------------------------------------
+async function handleSalesAgent(message, s) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("restaurant") || lower.includes("bar") || lower.includes("cafe")) {
+    return "🍽️ You might be interested in our <a href='/hospitality-pos.html'>Hospitality EPOS</a> systems — integrated with TapaPay, TapaOffice and Kitchen Screens.";
+  }
+  if (lower.includes("retail") || lower.includes("shop") || lower.includes("store")) {
+    return "🛍️ Check out our <a href='/retail-pos.html'>Retail POS</a> solutions — barcode scanning, label printing and full stock control.";
+  }
+  if (lower.includes("gift") || lower.includes("voucher")) {
+    return "🎁 Try <a href='/digital-gift-vouchers.html'>GiveaVoucher</a> — sell digital and postal gift vouchers online.";
+  }
+  if (lower.includes("payment") || lower.includes("tapapay") || lower.includes("card")) {
+    return "💳 Learn more about <a href='/integrated-payments.html'>TapaPay</a> — integrated card payments with faster payouts.";
+  }
+  if (lower.includes("demo") || lower.includes("book")) {
+    return "📅 You can <a href='/book-a-demo.html'>book a demo</a> anytime — we’ll get back to confirm times.";
+  }
+  if (lower.includes("hardware") || lower.includes("terminal") || lower.includes("till")) {
+    return "🖥️ See our <a href='/hardware.html'>hardware options</a> — POS terminals, printers and accessories.";
+  }
+
+  return (
+    "💬 I can help you find the right solution — just tell me your business type (e.g. café, bar, retail, hotel).<br><br>" +
+    "Or browse all <a href='/products.html'>RST EPOS Products</a> to explore."
+  );
+}
+
 // ------------------------------------------------------
 app.listen(PORT, () =>
-  console.log(`🚀 Tappy Brain v12.1 running on port ${PORT} (Render ready)`)
+  console.log(`🚀 Tappy Brain v12.2 (Agentic Sales + FAQ + Cache) → http://localhost:${PORT}`)
 );
