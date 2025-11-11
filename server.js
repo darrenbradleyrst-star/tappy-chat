@@ -19,7 +19,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 
 dotenv.config();
-const PORT = process.env.PORT || 3001; // ✅ Moved back to top
+const PORT = process.env.PORT || 3001;
 const app = express();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -36,23 +36,18 @@ if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 // ------------------------------------------------------
 // 🌐 Express / CORS / Rate Limiting Setup
 // ------------------------------------------------------
-app.set("trust proxy", 1); // ✅ Required for Render proxy (avoids X-Forwarded-For warnings)
-app.use(express.json({ limit: "1mb" })); // safer JSON parsing with size limit
+app.set("trust proxy", 1); // ✅ Required for Render proxy
+app.use(express.json({ limit: "1mb" }));
 
 app.use(
   cors({
     origin: [
-      // ✅ Local dev
       "http://localhost:8080",
       "http://127.0.0.1:8080",
       "http://localhost:5500",
       "http://127.0.0.1:5500",
-
-      // ✅ Production + Staging
       "https://staging.rstepos.com",
       "https://www.rstepos.com",
-
-      // ✅ Render API itself (for self-testing or direct access)
       "https://tappy-chat.onrender.com",
     ],
     methods: ["GET", "POST", "OPTIONS"],
@@ -61,7 +56,6 @@ app.use(
   })
 );
 
-// ✅ Moderate rate limit: 40 req/min per IP
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -71,7 +65,6 @@ app.use(
     legacyHeaders: false,
   })
 );
-
 
 // ------------------------------------------------------
 // 🧾 Utilities
@@ -179,59 +172,24 @@ function findCachedSupport(message) {
 }
 
 // ------------------------------------------------------
-// 🔍 Sitemap + Content Fetcher (for OpenAI context)
-// ------------------------------------------------------
-async function getSitemapUrls(sitemapUrl = "https://staging.rstepos.com/sitemap.xml") {
-  try {
-    const res = await fetch(sitemapUrl);
-    const xml = await res.text();
-    const parsed = await xml2js.parseStringPromise(xml);
-    if (parsed.urlset?.url)
-      return parsed.urlset.url.map((u) => u.loc?.[0]).filter(Boolean);
-  } catch {}
-  return [
-    "https://staging.rstepos.com/",
-    "https://staging.rstepos.com/pos-software.html",
-    "https://staging.rstepos.com/hospitality-pos.html",
-    "https://staging.rstepos.com/retail-pos.html",
-    "https://staging.rstepos.com/integrated-payments.html",
-    "https://staging.rstepos.com/giveavoucher.html",
-    "https://staging.rstepos.com/book-a-demo.html",
-  ];
-}
-
-async function fetchSiteText(url) {
-  const safe = url.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-  const cacheFile = path.join(cacheDir, safe + ".txt");
-  if (fs.existsSync(cacheFile) && Date.now() - fs.statSync(cacheFile).mtimeMs < 86400000) {
-    const cached = fs.readFileSync(cacheFile, "utf8");
-    if (cached.length > 50 && !cached.toLowerCase().includes("404")) return cached;
-  }
-
-  let text = "";
-  try {
-    const res = await fetch(url);
-    if (!res.ok || res.status !== 200) return "";
-    const html = await res.text();
-    if (html.toLowerCase().includes("404 not found")) return "";
-    const $ = cheerio.load(html);
-    $("script,style,nav,footer,header").remove();
-    text = $("body").text().replace(/\s+/g, " ").trim();
-    if (text.length < 50) return "";
-    fs.writeFileSync(cacheFile, text);
-  } catch {}
-  return text;
-}
-
-// ------------------------------------------------------
 // 💬 Chat route with Agentic-style Sales Context
 // ------------------------------------------------------
 const sessions = {};
 
 app.post("/api/chat", async (req, res) => {
-  const { message, context } = req.body;
+  const { message, context, reset } = req.body;
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-  if (!message) return res.status(400).json({ error: "No message provided" });
+
+  // ✅ Handle chatbot session reset (prevents 400 error)
+  if (reset) {
+    console.log("♻️ Session reset request received.");
+    sessions[ip] = { step: "none", module: "General", lead: {} };
+    return res.json({ reply: "Session reset OK." });
+  }
+
+  if (!message) {
+    return res.status(400).json({ error: "No message provided" });
+  }
 
   if (!sessions[ip]) sessions[ip] = { step: "none", module: "General", lead: {} };
   const s = sessions[ip];
@@ -242,6 +200,7 @@ app.post("/api/chat", async (req, res) => {
       s.step = "none";
       return res.json({ reply: "✅ No problem — please type your new question below." });
     }
+
     if (["end chat", "close", "exit"].includes(lower)) {
       sessions[ip] = { step: "none", module: "General", lead: {} };
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
@@ -260,7 +219,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🛍️ Agentic-style Sales Assistant (non-transactional)
+// 🛍️ Agentic-style Sales Assistant
 // ------------------------------------------------------
 async function handleSalesAgent(message, s) {
   const lower = message.toLowerCase();
@@ -289,6 +248,7 @@ async function handleSalesAgent(message, s) {
     "Or browse all <a href='/products.html'>RST EPOS Products</a> to explore."
   );
 }
+
 // ------------------------------------------------------
 // 🌐 Root + Static Route for Render
 // ------------------------------------------------------
