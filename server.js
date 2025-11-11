@@ -2,7 +2,7 @@
 // RST EPOS Smart Chatbot API v13.4
 // "Tappy Brain + Hybrid Context Router + Lead Capture"
 // ✅ General mode auto-checks Sales + Support
-// ✅ Sales mode: pricing → lead capture flow works
+// ✅ Sales mode: pricing → demo link
 // ✅ Support mode: multi-match FAQ links + inline answers
 // ✅ Cookie-based sessions (Render-safe persistence)
 // =========================================
@@ -124,109 +124,21 @@ async function fetchSiteText(url) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Route (Sales + Support + General)
-// ------------------------------------------------------
-const sessions = {};
-
-app.post("/api/chat", async (req, res) => {
-  const { message, context, reset } = req.body;
-
-  // ✅ Use cookie-based session ID (persistent across requests)
-  let sessionId = req.cookies.sessionId;
-  if (!sessionId) {
-    sessionId = Math.random().toString(36).substring(2, 10);
-    res.cookie("sessionId", sessionId, { httpOnly: true, sameSite: "none", secure: true, maxAge: 1000 * 60 * 30 });
-  }
-
-  if (reset) {
-    sessions[sessionId] = { step: "none", module: "General", lead: {} };
-    return res.json({ reply: "Session reset OK." });
-  }
-
-  if (!message) return res.status(400).json({ error: "No message provided" });
-  if (!sessions[sessionId]) sessions[sessionId] = { step: "none", module: "General", lead: {} };
-  const s = sessions[sessionId];
-  const lower = message.toLowerCase().trim();
-
-  try {
-    if (["restart", "new question"].includes(lower))
-      return res.json({ reply: "✅ No problem — please type your new question below." });
-    if (["end", "exit", "close"].includes(lower))
-      return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
-
-   // --------------------------
-// SALES MODE
-// --------------------------
-if (context === "sales") {
-  // Handle active lead capture (if any)
-  if (s.step && s.step !== "none") {
-    const reply = continueLeadCapture(s, message);
-    if (reply.complete) {
-      logJSON(salesLeadsPath, s.lead);
-      s.step = "none";
-      s.awaitingPriceConfirm = false;
-      s.stepStarted = false;
-      return res.json({
-        reply: "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
-      });
-    }
-    return res.json({ reply: reply.text });
-  }
-
-  // Detect pricing or quote intent
-  const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
-  if (priceIntent) {
-    return res.json({
-      reply: `💬 We offer flexible low-monthly plans depending on your setup and card fees.<br><br>
-      📅 You can <a href="/book-a-demo.html" target="_blank">book a demo</a> and one of our team will show you detailed pricing and features.`,
-    });
-  }
-
-  // Otherwise, run the normal sales lookup
-  const reply = await handleSalesAgent(message, s);
-  return res.json({ reply });
-}
-
-
-    // --------------------------
-    // SUPPORT MODE
-    // --------------------------
-    if (context === "support") {
-      const reply = await handleSupportAgent(message);
-      return res.json({ reply });
-    }
-
-    // --------------------------
-    // GENERAL MODE (Hybrid Router)
-    // --------------------------
-    if (context === "general") {
-      const salesResult = await quickSalesLookup(message);
-      if (salesResult) return res.json({ reply: salesResult });
-
-      const supportResult = await quickSupportLookup(message);
-      if (supportResult) return res.json({ reply: supportResult });
-
-      return res.json({
-        reply: "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
-      });
-    }
-  } catch (err) {
-    console.error("❌ Chat error:", err);
-    res.status(500).json({ error: "Chat service unavailable" });
-  }
-});
-
-// ------------------------------------------------------
 // 🧠 Support Search + Interactive Selection
 // ------------------------------------------------------
 function findSupportMatches(message) {
   const lower = message.toLowerCase();
-  return faqsSupport.filter((faq) => faq.title.toLowerCase().includes(lower) || faq.keywords?.some(k => lower.includes(k)));
+  return faqsSupport.filter(
+    (faq) =>
+      faq.title.toLowerCase().includes(lower) ||
+      faq.keywords?.some((k) => lower.includes(k))
+  );
 }
 
 async function handleSupportAgent(message) {
   const s = sessions[Object.keys(sessions)[0]];
   const matches = findSupportMatches(message);
+
   if (s.awaitingFaqChoice && /^\d+$/.test(message.trim())) {
     const idx = parseInt(message.trim(), 10) - 1;
     const list = s.lastFaqList || [];
@@ -237,17 +149,32 @@ async function handleSupportAgent(message) {
       return `📘 *${entry.title}*<br>${entry.answers.join("<br>")}<br><br>Did that resolve your issue?`;
     }
   }
+
   if (matches.length === 1) {
     s.awaitingFaqChoice = false;
     return `📘 *${matches[0].title}*<br>${matches[0].answers.join("<br>")}<br><br>Did that resolve your issue?`;
   }
+
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
     const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
     return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
+
   return "🤔 I’m not sure about that one — can you describe the issue in more detail?";
+}
+
+// ✅ Missing helper added
+async function quickSupportLookup(message) {
+  const matches = findSupportMatches(message);
+  if (!matches.length) return null;
+
+  if (matches.length === 1)
+    return `🧩 This might help:<br><strong>${matches[0].title}</strong><br>${matches[0].answers.join("<br>")}<br><br>Did that fix it?`;
+
+  const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
+  return `💡 I found some support articles that might match:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
 }
 
 // ------------------------------------------------------
@@ -321,6 +248,89 @@ function continueLeadCapture(s, message) {
       return { text: "💬 Please continue…" };
   }
 }
+
+// ------------------------------------------------------
+// 💬 Chat Route (Sales + Support + General)
+// ------------------------------------------------------
+const sessions = {};
+
+app.post("/api/chat", async (req, res) => {
+  const { message, context, reset } = req.body;
+  let sessionId = req.cookies.sessionId;
+  if (!sessionId) {
+    sessionId = Math.random().toString(36).substring(2, 10);
+    res.cookie("sessionId", sessionId, { httpOnly: true, sameSite: "none", secure: true, maxAge: 1000 * 60 * 30 });
+  }
+
+  if (reset) {
+    sessions[sessionId] = { step: "none", module: "General", lead: {} };
+    return res.json({ reply: "Session reset OK." });
+  }
+
+  if (!message) return res.status(400).json({ error: "No message provided" });
+  if (!sessions[sessionId]) sessions[sessionId] = { step: "none", module: "General", lead: {} };
+  const s = sessions[sessionId];
+  const lower = message.toLowerCase().trim();
+
+  try {
+    if (["restart", "new question"].includes(lower))
+      return res.json({ reply: "✅ No problem — please type your new question below." });
+    if (["end", "exit", "close"].includes(lower))
+      return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
+
+    // --------------------------
+    // SALES MODE
+    // --------------------------
+    if (context === "sales") {
+      if (s.step && s.step !== "none") {
+        const reply = continueLeadCapture(s, message);
+        if (reply.complete) {
+          logJSON(salesLeadsPath, s.lead);
+          s.step = "none";
+          return res.json({ reply: "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!" });
+        }
+        return res.json({ reply: reply.text });
+      }
+
+      const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
+      if (priceIntent) {
+        return res.json({
+          reply: `💬 We offer flexible low-monthly plans depending on your setup and card fees.<br><br>
+          📅 You can <a href="/book-a-demo.html" target="_blank">book a demo</a> and one of our team will show you detailed pricing and features.`,
+        });
+      }
+
+      const reply = await handleSalesAgent(message, s);
+      return res.json({ reply });
+    }
+
+    // --------------------------
+    // SUPPORT MODE
+    // --------------------------
+    if (context === "support") {
+      const reply = await handleSupportAgent(message);
+      return res.json({ reply });
+    }
+
+    // --------------------------
+    // GENERAL MODE (Hybrid Router)
+    // --------------------------
+    if (context === "general") {
+      const salesResult = await quickSalesLookup(message);
+      if (salesResult) return res.json({ reply: salesResult });
+
+      const supportResult = await quickSupportLookup(message);
+      if (supportResult) return res.json({ reply: supportResult });
+
+      return res.json({
+        reply: "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
+      });
+    }
+  } catch (err) {
+    console.error("❌ Chat error:", err);
+    res.status(500).json({ error: "Chat service unavailable" });
+  }
+});
 
 // ------------------------------------------------------
 // 🌐 Root + Health Check
