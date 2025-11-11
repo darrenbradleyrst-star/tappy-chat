@@ -1,11 +1,12 @@
 // =========================================
-// RST EPOS Smart Chatbot API v13.4
+// RST EPOS Smart Chatbot API v13.4a
 // "Tappy Brain + Hybrid Context Router + Lead Capture"
 // ✅ General mode auto-checks Sales + Support
 // ✅ Sales mode: pricing → demo link
 // ✅ Support mode: multi-match FAQ links + inline answers
 // ✅ Cookie-based sessions (Render-safe persistence)
 // ✅ Preflight handler to prevent 502 CORS errors
+// ✅ Defensive FAQ validation to stop TypeError on Render
 // =========================================
 
 import express from "express";
@@ -93,14 +94,19 @@ const logJSON = (file, data) =>
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 // ------------------------------------------------------
-// 📚 Load Support FAQs
+// 📚 Load Support FAQs (with validation)
 // ------------------------------------------------------
 const faqsSupportPath = path.join(__dirname, "faqs_support.json");
 let faqsSupport = [];
 try {
-  if (fs.existsSync(faqsSupportPath))
-    faqsSupport = JSON.parse(fs.readFileSync(faqsSupportPath, "utf8"));
-  console.log(`✅ Loaded ${faqsSupport.length} support FAQ entries`);
+  if (fs.existsSync(faqsSupportPath)) {
+    const raw = JSON.parse(fs.readFileSync(faqsSupportPath, "utf8"));
+    faqsSupport = raw.filter(f => f && typeof f.title === "string" && Array.isArray(f.answers));
+    const invalidCount = raw.length - faqsSupport.length;
+    console.log(`✅ Loaded ${faqsSupport.length} valid support FAQ entries${invalidCount > 0 ? ` (${invalidCount} invalid skipped)` : ""}`);
+  } else {
+    console.warn("⚠️ faqs_support.json not found");
+  }
 } catch (err) {
   console.error("❌ Failed to load faqs_support.json:", err);
 }
@@ -144,16 +150,17 @@ async function fetchSiteText(url) {
 // 🧠 Support Search + Interactive Selection (Safe Version)
 // ------------------------------------------------------
 function findSupportMatches(message) {
-  const lower = message?.toLowerCase?.() || "";
+  const lower = (message || "").toLowerCase();
   return faqsSupport.filter((faq) => {
-    const title = faq.title ? faq.title.toLowerCase() : "";
+    if (!faq || !faq.title) return false;
+    const title = faq.title.toLowerCase();
     const keywords = Array.isArray(faq.keywords) ? faq.keywords : [];
-    return title.includes(lower) || keywords.some((k) => lower.includes(k.toLowerCase()));
+    return title.includes(lower) || keywords.some((k) => typeof k === "string" && lower.includes(k.toLowerCase()));
   });
 }
 
-async function handleSupportAgent(message) {
-  const s = sessions[Object.keys(sessions)[0]];
+async function handleSupportAgent(message, sessionId) {
+  const s = sessions[sessionId] || {};
   const matches = findSupportMatches(message);
 
   if (s.awaitingFaqChoice && /^\d+$/.test(message.trim())) {
@@ -216,7 +223,10 @@ async function handleSalesAgent(message) {
     for (const url of urls) {
       const text = await fetchSiteText(url);
       if (!text) continue;
-      const matches = lower.split(/\s+/).map((w) => (text.toLowerCase().includes(w) ? 1 : 0)).reduce((a, b) => a + b, 0);
+      const matches = lower
+        .split(/\s+/)
+        .map((w) => (text.toLowerCase().includes(w) ? 1 : 0))
+        .reduce((a, b) => a + b, 0);
       if (matches > 0) scores.push({ url, matches });
     }
     scores.sort((a, b) => b.matches - a.matches);
@@ -224,7 +234,13 @@ async function handleSalesAgent(message) {
       return "💬 I can help you find the right solution — tell me your business type (e.g. café, bar, retail).";
     const links = scores
       .slice(0, 5)
-      .map((s) => `<a href='${s.url}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${path.basename(s.url).replace(/[-_]/g, " ").replace(".html", "")}</a>`)
+      .map(
+        (s) =>
+          `<a href='${s.url}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${path
+            .basename(s.url)
+            .replace(/[-_]/g, " ")
+            .replace(".html", "")}</a>`
+      )
       .join("");
     return `💡 I found a few pages mentioning that:<br>${links}`;
   } catch {
@@ -294,7 +310,7 @@ app.post("/api/chat", async (req, res) => {
   if (!sessions[sessionId]) sessions[sessionId] = { step: "none", module: "General", lead: {} };
 
   const s = sessions[sessionId];
-  const lower = message.toLowerCase().trim();
+  const lower = (message || "").toLowerCase().trim();
 
   try {
     if (["restart", "new question"].includes(lower))
@@ -303,16 +319,17 @@ app.post("/api/chat", async (req, res) => {
     if (["end", "exit", "close"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
 
-    // --------------------------
     // SALES MODE
-    // --------------------------
     if (context === "sales") {
       if (s.step && s.step !== "none") {
         const reply = continueLeadCapture(s, message);
         if (reply.complete) {
           logJSON(salesLeadsPath, s.lead);
           s.step = "none";
-          return res.json({ reply: "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!" });
+          return res.json({
+            reply:
+              "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
+          });
         }
         return res.json({ reply: reply.text });
       }
@@ -329,17 +346,13 @@ app.post("/api/chat", async (req, res) => {
       return res.json({ reply });
     }
 
-    // --------------------------
     // SUPPORT MODE
-    // --------------------------
     if (context === "support") {
-      const reply = await handleSupportAgent(message);
+      const reply = await handleSupportAgent(message, sessionId);
       return res.json({ reply });
     }
 
-    // --------------------------
     // GENERAL MODE
-    // --------------------------
     if (context === "general") {
       const salesResult = await quickSalesLookup(message);
       if (salesResult) return res.json({ reply: salesResult });
@@ -364,9 +377,10 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "13.4",
+    version: "13.4a",
     name: "Tappy Brain API",
-    message: "Hybrid General Flow (Sales + Support Routing) enabled with persistent sessions and safe CORS.",
+    message:
+      "Hybrid General Flow (Sales + Support Routing) enabled with persistent sessions and safe CORS.",
     time: new Date().toISOString(),
   });
 });
@@ -375,5 +389,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Tappy Brain v13.4 listening on port ${PORT}`);
+  console.log(`🚀 Tappy Brain v13.4a listening on port ${PORT}`);
 });
