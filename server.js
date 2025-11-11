@@ -213,45 +213,64 @@ async function aiSearchSite(message) {
 async function handleSupportAgent(message, sessionId) {
   if (!sessions[sessionId]) sessions[sessionId] = {};
   const s = sessions[sessionId];
-  const matches = findSupportMatches(message);
   const lowerMsg = (message || "").toLowerCase().trim();
 
+  // User selecting from previous FAQ list
   if (s.awaitingFaqChoice && /^\d+$/.test(lowerMsg)) {
     const idx = parseInt(lowerMsg, 10) - 1;
     const list = s.lastFaqList || [];
+
     if (list[idx]) {
       const entry = list[idx];
       s.awaitingFaqChoice = false;
       s.lastFaqList = null;
+      sessions[sessionId] = s;
+
       const title = entry.title || entry.questions?.[0] || "Help Article";
-      return `📘 <strong>${title}</strong><br>${entry.answers.join("<br>")}<br><br>Did that resolve your issue?`;
+      const steps = Array.isArray(entry.answers)
+        ? entry.answers.join("<br>")
+        : entry.answers;
+      return `📘 <strong>${title}</strong><br>${steps}<br><br>Did that resolve your issue?`;
     }
-    return "⚠️ Please enter a valid number from the list above.";
+
+    // If invalid number entered
+    return `⚠️ Please reply with a valid number from the list above.`;
   }
 
+  // Try direct FAQ match
+  const matches = findSupportMatches(message);
   if (matches.length === 1) {
     const m = matches[0];
     const title = m.title || m.questions?.[0] || "Help Article";
-    return `📘 <strong>${title}</strong><br>${m.answers.join("<br>")}<br><br>Did that resolve your issue?`;
+    const steps = Array.isArray(m.answers)
+      ? m.answers.join("<br>")
+      : m.answers;
+    return `📘 <strong>${title}</strong><br>${steps}<br><br>Did that resolve your issue?`;
   }
 
+  // Multiple FAQ matches
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
+    sessions[sessionId] = s;
+
     const numbered = matches
       .map((m, i) => `${i + 1}. ${m.title || m.questions?.[0] || "Help Article"}`)
       .join("<br>");
     return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
 
+  // No FAQ match → AI site content search
   const aiResult = await aiSearchSite(message);
   if (aiResult) return aiResult;
 
+  // Fallback if nothing found
   return `🙁 I couldn’t find an exact match.<br><br>
 Would you like to:<br>
 👉 <a href="/contact-us.html">Contact Support</a><br>
 💡 or <a href="/support.html">Browse the FAQ Library</a>?`;
 }
+
 
 // ------------------------------------------------------
 // 🛍️ Sales Agent
