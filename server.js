@@ -42,6 +42,8 @@ app.use(
       "http://localhost:5500",
       "http://127.0.0.1:5500",
       "https://staging.rstepos.com",
+      "https://www.rstepos.com",
+      "https://tappy-chat.onrender.com",
     ],
   })
 );
