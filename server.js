@@ -17,7 +17,6 @@ import xml2js from "xml2js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-
 dotenv.config();
 const app = express();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
