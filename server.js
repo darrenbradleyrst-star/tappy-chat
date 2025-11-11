@@ -263,6 +263,18 @@ async function handleSalesAgent(message, s) {
     "Or browse all <a href='/products.html'>RST EPOS Products</a> to explore."
   );
 }
+// ------------------------------------------------------
+// 🌐 Root + Static Route for Render
+// ------------------------------------------------------
+app.get("/", (req, res) => {
+  res.send(`
+    <h1>🚀 Tappy Brain v12.2 is Live</h1>
+    <p>Your chatbot API is running successfully on Render.</p>
+    <p>Try sending a POST request to <code>/api/chat</code> with { "message": "hello" }</p>
+    <hr>
+    <p><a href="https://www.rstepos.com" target="_blank">Visit RST EPOS Website</a></p>
+  `);
+});
 
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
