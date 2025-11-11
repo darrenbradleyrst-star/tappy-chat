@@ -1,9 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.3c (Stable)
-// "Tappy Brain – Sales FAQs Only (Render-safe CORS)"
-// ✅ Keeps all prior working logic
-// ✅ Uses faqs_sales.json
-// ✅ Fixes 502 preflight via fallback wildcard
+// RST EPOS Smart Chatbot API v14.4 (Enhanced UI Options)
+// "Tappy Brain – Sales FAQs Only (Render-safe CORS + Pill Buttons)"
+// ✅ Keeps all v14.3c logic intact
+// ✅ Adds support for clickable pill options instead of numeric replies
 // =========================================
 
 import express from "express";
@@ -24,7 +23,7 @@ const app = express();
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const faqSalesPath = path.join(__dirname, "faqs_sales.json"); // ✅ updated filename
+const faqSalesPath = path.join(__dirname, "faqs_sales.json");
 const cacheDir = path.join(__dirname, "cache");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
@@ -45,7 +44,6 @@ const allowedOrigins = [
   "http://127.0.0.1:5500"
 ];
 
-// ✅ Universal preflight handler (Render-safe)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (req.method === "OPTIONS") {
@@ -69,12 +67,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Add CORS middleware as a second layer
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(null, true); // fallback wildcard for Render
+      return callback(null, true);
     },
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
@@ -136,7 +133,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler
+// 💬 Chat Handler (Enhanced for Pill Buttons)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -170,11 +167,23 @@ async function handleSalesFAQ(message, sessionId) {
     s.currentId = entry.id;
     return showFAQ(entry);
   }
+
+  // ✅ Multiple matches → return pill options
   if (matches.length > 1) {
     s.awaitingChoice = true;
     s.lastFaqList = matches;
-    const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
-    return `🔍 I found several matches:<br><br>${numbered}<br><br>Reply with a number.`;
+
+    const options = matches.map((m, i) => ({
+      label: m.title,
+      index: i + 1
+    }));
+
+    // return structured object for front-end rendering
+    return {
+      type: "options",
+      intro: "🔍 I found several possible matches:",
+      options
+    };
   }
 
   return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
@@ -196,7 +205,13 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     const reply = await handleSalesFAQ(message, sessionId);
-    res.json({ reply });
+
+    // ✅ Send structured response safely
+    if (typeof reply === "object" && reply.type === "options") {
+      res.json({ reply });
+    } else {
+      res.json({ reply });
+    }
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
@@ -216,8 +231,8 @@ app.get("/test", (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.3c",
-    mode: "Sales FAQ Only",
+    version: "14.4",
+    mode: "Sales FAQ Only + Pill Buttons",
     faqs: faqSales.length,
     time: new Date().toISOString()
   });
@@ -227,5 +242,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.3c (Sales FAQ Only) running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.4 (Sales FAQ Only + Pill Buttons) running on port ${PORT}`)
 );
