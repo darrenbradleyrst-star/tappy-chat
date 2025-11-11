@@ -163,7 +163,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat handler (exact match + ranked search + branching)
+// 💬 Chat Handler (Improved Yes/No Branching + 90% Auto-Select)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -172,84 +172,117 @@ async function handleSalesFAQ(message, sessionId) {
   const s = sessions[sessionId];
   const lower = (message || "").toLowerCase().trim();
 
-  // ✅ yes/no branching
+  // ✅ Branch: Handle "Yes / No" response if current FAQ has next options
   if (s.currentId) {
     const currentFAQ = faqSales.find((f) => f.id === s.currentId);
     if (currentFAQ?.next?.options) {
-      let nextTarget = null;
-      if (lower.includes("yes")) nextTarget = currentFAQ.next.options.yes;
-      else if (lower.includes("no")) nextTarget = currentFAQ.next.options.no;
+      let nextRef = null;
+      if (lower.includes("yes")) nextRef = currentFAQ.next.options.yes;
+      else if (lower.includes("no")) nextRef = currentFAQ.next.options.no;
 
-      if (nextTarget) {
-        // numeric id
-        if (typeof nextTarget === "number") {
-          const nextFAQ = faqSales.find((f) => f.id === nextTarget);
-          if (nextFAQ) {
-            s.currentId = nextFAQ.id;
-            console.log(`↪️ Branch → FAQ ${nextFAQ.id}: ${nextFAQ.title}`);
-            return showFAQ(nextFAQ);
-          }
+      if (nextRef) {
+        // If it's a numeric or string ID → find matching FAQ
+        const nextFAQ =
+          faqSales.find((f) => f.id === nextRef) ||
+          faqSales.find((f) => String(f.id) === String(nextRef)) ||
+          faqSales.find((f) => f.title?.toLowerCase() === String(nextRef).toLowerCase());
+
+        if (nextFAQ) {
+          s.currentId = nextFAQ.id;
+          console.log(`↪️ Branch → ${lower.toUpperCase()} → ${nextFAQ.title}`);
+          return showFAQ(nextFAQ);
         }
 
-        // string id/title/url
-        if (typeof nextTarget === "string") {
-          const nextFAQ =
-            faqSales.find((f) => f.id === nextTarget) ||
-            faqSales.find(
-              (f) =>
-                f.title?.toLowerCase() === nextTarget.toLowerCase() ||
-                String(f.id) === nextTarget
-            );
-          if (nextFAQ) {
-            s.currentId = nextFAQ.id;
-            console.log(`↪️ Branch → FAQ: ${nextFAQ.title}`);
-            return showFAQ(nextFAQ);
-          }
-
-          if (/^https?:\/\//.test(nextTarget) || nextTarget.endsWith(".html")) {
-            console.log(`🌐 Branch → external: ${nextTarget}`);
-            return `👉 <a href="${nextTarget}" target="_blank">Open related page</a>`;
-          }
+        // External link fallback (if not an internal FAQ)
+        if (typeof nextRef === "string" && nextRef.startsWith("/")) {
+          console.log(`🌐 Branch → external link: ${nextRef}`);
+          return `👉 <a href="${nextRef}" target="_blank">View related info</a>`;
         }
       }
+
+      // If no valid next target found
       return `${currentFAQ.next.question} (Yes or No)`;
     }
   }
 
-  // ✅ exact title
-  const normalise = (t) =>
-    (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
+  // ✅ Exact match (case-insensitive)
+  const normalise = (str) => (str || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
   const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
   if (exact) {
     s.currentId = exact.id;
-    console.log(`🎯 Exact: ${exact.title}`);
+    console.log(`🎯 Exact match found: "${exact.title}"`);
     return showFAQ(exact);
   }
 
-  // ✅ weighted search
-  const matches = findSalesMatches(message);
-  if (matches.length === 1) {
-    const m = matches[0];
-    s.currentId = m.id;
-    console.log(`🎯 Single: ${m.title}`);
-    return showFAQ(m);
+  // ✅ Weighted ranking search
+  const scored = faqSales
+    .map((faq) => {
+      const text = [
+        faq.title || "",
+        faq.intro || "",
+        ...(Array.isArray(faq.steps) ? faq.steps : []),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      let score = 0;
+      if (faq.title.toLowerCase() === lower) score += 10;
+      if (text.includes(lower)) score += 6;
+
+      const words = lower.split(/\s+/).filter((w) => w.length > 2);
+      words.forEach((w) => {
+        const count = (text.match(new RegExp(`\\b${w}\\b`, "g")) || []).length;
+        score += count * 2;
+      });
+
+      return { faq, score };
+    })
+    .filter((r) => r.score >= 6)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) {
+    console.log(`🙁 No matches for "${message}"`);
+    return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
   }
 
-  if (matches.length > 1) {
-    s.awaitingChoice = true;
-    s.lastFaqList = matches;
-    const trimmed = matches.slice(0, 8);
-    const options = trimmed.map((m, i) => ({
-      label: m.title,
-      index: i + 1,
-    }));
-    console.log(`🧩 ${matches.length} matches → showing ${options.length}`);
-    return { type: "options", intro: "🔍 I found several possible matches:", options };
+  // ✅ Confidence check → Auto-select top match if strong
+  if (scored.length > 1) {
+    const top = scored[0].score;
+    const next = scored[1]?.score || 0;
+    const confidence = next > 0 ? top / next : 1;
+
+    console.log(`📊 Confidence: top=${top}, next=${next}, ratio=${confidence.toFixed(2)}`);
+
+    if (confidence >= 1.9 || top >= 12) {
+      const entry = scored[0].faq;
+      s.currentId = entry.id;
+      console.log(`🤖 Auto-selected: ${entry.title}`);
+      return showFAQ(entry);
+    }
   }
 
-  console.log(`🙁 No match for "${message}"`);
-  return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
+  // ✅ Single match
+  if (scored.length === 1) {
+    const entry = scored[0].faq;
+    s.currentId = entry.id;
+    return showFAQ(entry);
+  }
+
+  // ✅ Multiple matches → show pill buttons
+  const trimmed = scored.slice(0, 8);
+  const options = trimmed.map((m, i) => ({
+    label: m.faq.title,
+    index: i + 1,
+  }));
+
+  console.log(`🧩 Multiple matches (${scored.length}), showing pill buttons.`);
+  return {
+    type: "options",
+    intro: "🔍 I found several possible matches:",
+    options,
+  };
 }
+
 
 // ------------------------------------------------------
 // 🔗 Endpoints
