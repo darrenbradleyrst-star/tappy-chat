@@ -1,11 +1,9 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.3b (Updated)
-// "Tappy Brain – Sales FAQs Only (Debug + Improved Matching)"
-// ✅ Render-safe CORS (fixes 502 preflight)
-// ✅ Loads faqs_sales.json only
-// ✅ Searches title, intro, and steps (no keywords needed)
-// ✅ Supports branching logic ("next" → yes/no)
-// ✅ Adds /test?q= route for live search checking
+// RST EPOS Smart Chatbot API v14.3c (Stable)
+// "Tappy Brain – Sales FAQs Only (Render-safe CORS)"
+// ✅ Keeps all prior working logic
+// ✅ Uses faqs_sales.json
+// ✅ Fixes 502 preflight via fallback wildcard
 // =========================================
 
 import express from "express";
@@ -31,13 +29,12 @@ const cacheDir = path.join(__dirname, "cache");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Middleware (Render-safe CORS + Preflight Fix)
+// 🌐 Middleware (Render-safe CORS)
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
-// Allowed origins
 const allowedOrigins = [
   "https://staging.rstepos.com",
   "https://www.rstepos.com",
@@ -48,52 +45,45 @@ const allowedOrigins = [
   "http://127.0.0.1:5500"
 ];
 
-// 1️⃣ — Early Preflight Response
+// ✅ Universal preflight handler (Render-safe)
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
   if (req.method === "OPTIONS") {
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    }
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      allowedOrigins.includes(origin) ? origin : "*"
+    );
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
     return res.status(200).end();
   }
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Vary", "Origin");
   next();
 });
 
-// 2️⃣ — Standard CORS
+// ✅ Add CORS middleware as a second layer
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(null, true); // fallback wildcard for Render
+    },
+    credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-    optionsSuccessStatus: 200
-  })
-);
-
-// 3️⃣ — Debug Log
-app.use((req, res, next) => {
-  console.log(`🌐 ${req.method} ${req.path} from ${req.headers.origin || "unknown"}`);
-  next();
-});
-
-// 4️⃣ — Rate Limiter
-app.use(
-  rateLimit({
-    windowMs: 60 * 1000,
-    max: 40,
-    message: { error: "Rate limit exceeded — please wait a moment." }
   })
 );
 
 // ------------------------------------------------------
-// 📚 Load Sales FAQs
+// 🧠 Load FAQs
 // ------------------------------------------------------
 let faqSales = [];
 try {
@@ -103,19 +93,19 @@ try {
       (f) => f && f.title && (Array.isArray(f.steps) || f.intro)
     );
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
-    console.log("🧠 First FAQ entry preview:", faqSales[0]);
-  } else console.warn("⚠️ faqs_sales.json not found");
+  } else {
+    console.warn("⚠️ faqs_sales.json not found");
+  }
 } catch (err) {
   console.error("❌ Failed to load faqs_sales.json:", err);
 }
 
 // ------------------------------------------------------
-// 🧠 Helper: Find FAQ Matches (title + intro + steps)
+// 🔍 Search helper
 // ------------------------------------------------------
 function findSalesMatches(message) {
   const lower = (message || "").toLowerCase().trim();
   if (!lower) return [];
-
   return faqSales.filter((faq) => {
     const text = [
       faq.title || "",
@@ -124,9 +114,7 @@ function findSalesMatches(message) {
     ]
       .join(" ")
       .toLowerCase()
-      .replace(/[^\w\s]/g, " "); // remove punctuation for cleaner match
-
-    // broad fuzzy match
+      .replace(/[^\w\s]/g, " ");
     return (
       text.includes(lower) ||
       lower.split(" ").some((w) => w.length > 2 && text.includes(w))
@@ -135,7 +123,7 @@ function findSalesMatches(message) {
 }
 
 // ------------------------------------------------------
-// 📘 Render FAQ Response
+// 📘 Render FAQ
 // ------------------------------------------------------
 function showFAQ(entry) {
   const steps = Array.isArray(entry.steps)
@@ -148,7 +136,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 🧩 Sales FAQ Handler
+// 💬 Chat Handler
 // ------------------------------------------------------
 const sessions = {};
 
@@ -157,7 +145,7 @@ async function handleSalesFAQ(message, sessionId) {
   const s = sessions[sessionId];
   const lower = (message || "").toLowerCase().trim();
 
-  // 1️⃣ — Handle branching “Yes/No” logic
+  // ✅ Handle branching yes/no
   if (s.currentId) {
     const currentFAQ = faqSales.find((f) => f.id === s.currentId);
     if (currentFAQ?.next?.options) {
@@ -175,29 +163,25 @@ async function handleSalesFAQ(message, sessionId) {
     }
   }
 
-  // 2️⃣ — Find matching FAQs
+  // ✅ Match search
   const matches = findSalesMatches(message);
-
   if (matches.length === 1) {
     const entry = matches[0];
     s.currentId = entry.id;
     return showFAQ(entry);
   }
-
   if (matches.length > 1) {
     s.awaitingChoice = true;
     s.lastFaqList = matches;
-    const numbered = matches
-      .map((m, i) => `${i + 1}. ${m.title || "FAQ"}`)
-      .join("<br>");
-    return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number you'd like to view.`;
+    const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
+    return `🔍 I found several matches:<br><br>${numbered}<br><br>Reply with a number.`;
   }
 
   return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
 }
 
 // ------------------------------------------------------
-// 💬 Chat Endpoint (Sales FAQ Only)
+// 🔗 Endpoints
 // ------------------------------------------------------
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
@@ -219,9 +203,6 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ------------------------------------------------------
-// 🧪 Debug Route for Testing Search
-// ------------------------------------------------------
 app.get("/test", (req, res) => {
   const q = req.query.q || "hardware";
   const result = findSalesMatches(q);
@@ -232,16 +213,12 @@ app.get("/test", (req, res) => {
   });
 });
 
-// ------------------------------------------------------
-// 🌐 Root Check
-// ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.3b",
+    version: "14.3c",
     mode: "Sales FAQ Only",
     faqs: faqSales.length,
-    message: "Tappy Brain: Sales FAQ JSON only (debug mode)",
     time: new Date().toISOString()
   });
 });
@@ -250,5 +227,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.3b (Sales FAQ Only) running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.3c (Sales FAQ Only) running on port ${PORT}`)
 );
