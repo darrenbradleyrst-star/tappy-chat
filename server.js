@@ -34,10 +34,14 @@ if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 // ------------------------------------------------------
 // 🌐 Middleware (Render-safe CORS)
 // ------------------------------------------------------
+// ------------------------------------------------------
+// 🌐 Middleware (Render-safe CORS + Preflight Fix)
+// ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
+// Allowed origins (staging + production + localhost)
 const allowedOrigins = [
   "https://staging.rstepos.com",
   "https://www.rstepos.com",
@@ -48,40 +52,50 @@ const allowedOrigins = [
   "http://127.0.0.1:5500",
 ];
 
+// 1️⃣ — Early Preflight Responder (critical for Render)
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Vary", "Origin");
+    return res.status(200).end(); // ✅ respond instantly (no middleware chain)
+  }
+  next();
+});
+
+// 2️⃣ — Standard CORS Middleware (handles GET/POST)
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS not allowed"));
-      }
-    },
+    origin: allowedOrigins,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
-    optionsSuccessStatus: 200,
+    optionsSuccessStatus: 200, // ✅ Safari-safe
   })
 );
 
-// ✅ Global OPTIONS handler to fix Render 502 Preflight
-app.options("*", (req, res) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Vary", "Origin");
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.status(200).send("OK");
-});
-
-// Optional debug log (safe to leave)
+// 3️⃣ — Optional Debug Log (safe)
 app.use((req, res, next) => {
   console.log(`🌐 ${req.method} ${req.path} from ${req.headers.origin || "unknown"}`);
   next();
 });
+
+// 4️⃣ — Rate Limiter
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 40,
+    message: { error: "Rate limit exceeded — please wait a moment." },
+  })
+);
+
 
 app.use(
   rateLimit({
