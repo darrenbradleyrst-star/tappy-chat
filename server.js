@@ -1,9 +1,10 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.2
-// "Tappy Brain – Sales FAQs Only"
+// RST EPOS Smart Chatbot API v14.3
+// "Tappy Brain – Sales FAQs Only (Full JSON Matching)"
 // ✅ Render-safe CORS (fixes 502 preflight)
 // ✅ Loads faq_sales.json only
-// ✅ Returns matches, steps, and optional follow-up choices
+// ✅ Searches title, intro, and steps (no keywords needed)
+// ✅ Supports branching logic ("next" → yes/no)
 // =========================================
 
 import express from "express";
@@ -91,7 +92,7 @@ app.use(
 );
 
 // ------------------------------------------------------
-// 🧾 Hardcoded Site Pages (keep for later AI use)
+// 🧾 Hardcoded Site Pages (for future AI use)
 // ------------------------------------------------------
 const sitePages = [
   "https://staging.rstepos.com/back-office-software.html",
@@ -117,7 +118,7 @@ try {
   if (fs.existsSync(faqSalesPath)) {
     const raw = JSON.parse(fs.readFileSync(faqSalesPath, "utf8"));
     faqSales = raw.filter(
-      (f) => f && (Array.isArray(f.keywords) || f.title) && (Array.isArray(f.steps) || f.intro)
+      (f) => f && f.title && (Array.isArray(f.steps) || f.intro)
     );
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
   } else console.warn("⚠️ faq_sales.json not found");
@@ -126,13 +127,25 @@ try {
 }
 
 // ------------------------------------------------------
-// 🧠 Helper: Find FAQ Matches
+// 🧠 Helper: Find FAQ Matches (by title, intro, steps)
 // ------------------------------------------------------
 function findSalesMatches(message) {
   const lower = (message || "").toLowerCase();
+
   return faqSales.filter((faq) => {
-    const list = faq.keywords || [];
-    return list.some((q) => q.toLowerCase().includes(lower) || lower.includes(q.toLowerCase()));
+    const blob = [
+      faq.title || "",
+      faq.intro || "",
+      ...(Array.isArray(faq.steps) ? faq.steps : [])
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    // Broad fuzzy match: entire phrase or any word
+    return (
+      blob.includes(lower) ||
+      lower.split(" ").some((word) => blob.includes(word))
+    );
   });
 }
 
@@ -203,7 +216,8 @@ async function handleSalesFAQ(message, sessionId) {
 // ------------------------------------------------------
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
-  let sessionId = req.cookies.sessionId || Math.random().toString(36).substring(2, 10);
+  let sessionId =
+    req.cookies.sessionId || Math.random().toString(36).substring(2, 10);
   res.cookie("sessionId", sessionId, {
     httpOnly: true,
     sameSite: "none",
@@ -226,11 +240,11 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.2",
+    version: "14.3",
     mode: "Sales FAQ Only",
     faqs: faqSales.length,
     pages: sitePages.length,
-    message: "Tappy Brain: Sales FAQ JSON only",
+    message: "Tappy Brain: Sales FAQ JSON only (full matching)",
     time: new Date().toISOString()
   });
 });
@@ -239,5 +253,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.2 (Sales FAQ Only) running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.3 (Sales FAQ Only) running on port ${PORT}`)
 );
