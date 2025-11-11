@@ -1,8 +1,7 @@
 // =========================================
 // RST EPOS Smart Chatbot API v12.2 ("Tappy Brain + Agentic Sales Context")
-// ✅ Adds context-aware "Sales" mode for agentic-style suggestions
-// ✅ Adds Support + General FAQ logic (with cache + fallback)
-// ✅ Retains lead capture foundation (ready for next stage)
+// ✅ Context-aware Sales mode with multi-page sitemap search
+// ✅ Support mode lists multiple matching FAQs as options
 // ✅ Clean structure, Render-ready
 // =========================================
 
@@ -36,7 +35,7 @@ if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 // ------------------------------------------------------
 // 🌐 Express / CORS / Rate Limiting Setup
 // ------------------------------------------------------
-app.set("trust proxy", 1); // ✅ Required for Render proxy
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 
 app.use(
@@ -74,16 +73,6 @@ const logJSON = (file, data) =>
 const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-function formatReplyText(text) {
-  if (!text) return "";
-  return text
-    .replace(/(\bStep\s*\d+[:.)]?)/gi, "<br><strong>$1</strong> ")
-    .replace(/(\d+\.)\s*/g, "<br>$1 ")
-    .replace(/([•\-])\s*/g, "<br>$1 ")
-    .replace(/(<br>\s*){2,}/g, "<br>")
-    .trim();
-}
-
 // ------------------------------------------------------
 // 📚 Load Support FAQs + Cache
 // ------------------------------------------------------
@@ -113,66 +102,44 @@ function saveSupportCache() {
 }
 
 // ------------------------------------------------------
-// 🔍 FAQ + Cache Matchers
+// 🔍 Sitemap + Page Fetch
 // ------------------------------------------------------
-function findSupportFAQ(message) {
-  const lower = message.toLowerCase().trim();
-  const words = lower.split(/\s+/).filter((w) => w.length > 2);
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const entry of faqsSupport) {
-    if (!entry.questions || !entry.answers) continue;
-    for (const q of entry.questions) {
-      const qWords = q.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-      const overlap = qWords.filter((w) => words.includes(w)).length;
-      const score = overlap / Math.max(qWords.length, 1);
-      if (score > bestScore && overlap >= 2 && score >= 0.5) {
-        bestScore = score;
-        bestMatch = entry;
-      }
-    }
-  }
-
-  if (!bestMatch) {
-    for (const entry of faqsSupport) {
-      if (!entry.questions || !entry.answers) continue;
-      for (const q of entry.questions) {
-        const qLower = q.toLowerCase();
-        if (
-          qLower.includes(lower) ||
-          lower.includes(qLower) ||
-          (lower.includes("printer") && qLower.includes("printer")) ||
-          (lower.includes("voucher") && qLower.includes("voucher"))
-        ) {
-          bestMatch = entry;
-          break;
-        }
-      }
-      if (bestMatch) break;
-    }
-  }
-  return bestMatch ? bestMatch.answers.join("<br>") : null;
+async function getSitemapUrls(sitemapUrl = "https://www.rstepos.com/sitemap.xml") {
+  try {
+    const res = await fetch(sitemapUrl);
+    const xml = await res.text();
+    const parsed = await xml2js.parseStringPromise(xml);
+    if (parsed.urlset?.url)
+      return parsed.urlset.url.map((u) => u.loc?.[0]).filter(Boolean);
+  } catch {}
+  return [];
 }
 
-function findCachedSupport(message) {
-  const lower = message.toLowerCase();
-  let bestKey = null,
-    bestScore = 0;
-  for (const key of Object.keys(supportCache)) {
-    const keyLower = key.toLowerCase();
-    const overlap = keyLower.split(" ").filter((w) => lower.includes(w)).length;
-    const score = overlap / keyLower.split(" ").length;
-    if (score > bestScore && score >= 0.5) {
-      bestScore = score;
-      bestKey = key;
-    }
+async function fetchSiteText(url) {
+  const safe = url.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+  const cacheFile = path.join(cacheDir, safe + ".txt");
+  if (fs.existsSync(cacheFile) && Date.now() - fs.statSync(cacheFile).mtimeMs < 86400000) {
+    const cached = fs.readFileSync(cacheFile, "utf8");
+    if (cached.length > 50 && !cached.toLowerCase().includes("404")) return cached;
   }
-  return bestKey ? supportCache[bestKey] : null;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return "";
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    $("script,style,nav,footer,header").remove();
+    const text = $("body").text().replace(/\s+/g, " ").trim();
+    if (text.length > 50) {
+      fs.writeFileSync(cacheFile, text);
+      return text;
+    }
+  } catch {}
+  return "";
 }
 
 // ------------------------------------------------------
-// 💬 Chat route with Agentic-style Sales Context + Support Logic
+// 💬 Chat route with multi-match support
 // ------------------------------------------------------
 const sessions = {};
 
@@ -180,7 +147,6 @@ app.post("/api/chat", async (req, res) => {
   const { message, context, reset } = req.body;
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-  // ✅ Handle chatbot session reset
   if (reset) {
     console.log("♻️ Session reset request received.");
     sessions[ip] = { step: "none", module: "General", lead: {} };
@@ -188,42 +154,45 @@ app.post("/api/chat", async (req, res) => {
   }
 
   if (!message) return res.status(400).json({ error: "No message provided" });
-
   if (!sessions[ip]) sessions[ip] = { step: "none", module: "General", lead: {} };
   const s = sessions[ip];
   const lower = message.toLowerCase().trim();
 
   try {
-    if (["start new question", "new question", "restart"].includes(lower)) {
-      s.step = "none";
+    if (["start new question", "new question", "restart"].includes(lower))
       return res.json({ reply: "✅ No problem — please type your new question below." });
-    }
-
-    if (["end chat", "close", "exit"].includes(lower)) {
-      sessions[ip] = { step: "none", module: "General", lead: {} };
+    if (["end chat", "close", "exit"].includes(lower))
       return res.json({ reply: "👋 Thanks for chatting! Talk soon." });
-    }
 
     if (context === "sales") {
       const reply = await handleSalesAgent(message, s);
       return res.json({ reply });
     }
 
-    // ✅ Support & General Context
     if (context === "support" || context === "general") {
-      // Try cached match
-      const cached = findCachedSupport(message);
-      if (cached) return res.json({ reply: cached });
+      const matches = findMultipleSupportFAQs(message);
 
-      // Try FAQ lookup
-      const faq = findSupportFAQ(message);
-      if (faq) {
-        supportCache[message] = faq;
+      if (matches.length === 1) {
+        const reply = matches[0].answers.join("<br>");
+        supportCache[message] = reply;
         saveSupportCache();
-        return res.json({ reply: faq });
+        return res.json({ reply });
       }
 
-      // Fallback to polite unknown
+      if (matches.length > 1) {
+        const buttons = matches
+          .slice(0, 5)
+          .map(
+            (m, i) =>
+              `<button class="cb-opt" data-context="support" data-choice="${i}">${m.title || `Option ${i + 1}`}</button>`
+          )
+          .join("");
+        return res.json({
+          reply:
+            `🔍 I found several articles that might help:<br><div class='cb-options'>${buttons}</div>`,
+        });
+      }
+
       return res.json({
         reply:
           "🤔 I’m not sure about that one yet — can you describe the issue in more detail? I’ll pass it to support if needed.",
@@ -236,52 +205,104 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🛍️ Agentic-style Sales Assistant
+// 🧠 Support Multi-Match Finder
+// ------------------------------------------------------
+function findMultipleSupportFAQs(message) {
+  const lower = message.toLowerCase();
+  const words = lower.split(/\s+/).filter((w) => w.length > 2);
+  const results = [];
+
+  for (const entry of faqsSupport) {
+    if (!entry.questions || !entry.answers) continue;
+    const allQ = entry.questions.map((q) => q.toLowerCase());
+    const score = allQ.reduce((sum, q) => {
+      const qWords = q.split(/\s+/);
+      const overlap = qWords.filter((w) => words.includes(w)).length;
+      return sum + (overlap > 0 ? 1 : 0);
+    }, 0);
+    if (score > 0) results.push(entry);
+  }
+
+  return results.slice(0, 5);
+}
+
+// ------------------------------------------------------
+// 🛍️ Agentic Sales Assistant with Sitemap awareness
 // ------------------------------------------------------
 async function handleSalesAgent(message, s) {
   const lower = message.toLowerCase();
 
-  if (lower.includes("restaurant") || lower.includes("bar") || lower.includes("cafe")) {
-    return "🍽️ You might be interested in our <a href='/hospitality-pos.html'>Hospitality EPOS</a> systems — integrated with TapaPay, TapaOffice and Kitchen Screens.";
+  // Quick known routes
+  const quick = [
+    { k: ["restaurant", "bar", "cafe"], r: "/hospitality-pos.html", l: "Hospitality EPOS" },
+    { k: ["retail", "shop", "store"], r: "/retail-pos.html", l: "Retail POS" },
+    { k: ["voucher", "gift"], r: "/digital-gift-vouchers.html", l: "GiveaVoucher" },
+    { k: ["payment", "tapapay", "card"], r: "/integrated-payments.html", l: "TapaPay Payments" },
+    { k: ["hardware", "terminal", "till"], r: "/hardware.html", l: "POS Hardware" },
+  ];
+
+  for (const q of quick) {
+    if (q.k.some((kw) => lower.includes(kw))) {
+      return `🔗 You might like our <a href='${q.r}'>${q.l}</a> page — it covers that topic in more detail.`;
+    }
   }
-  if (lower.includes("retail") || lower.includes("shop") || lower.includes("store")) {
-    return "🛍️ Check out our <a href='/retail-pos.html'>Retail POS</a> solutions — barcode scanning, label printing and full stock control.";
-  }
-  if (lower.includes("gift") || lower.includes("voucher")) {
-    return "🎁 Try <a href='/digital-gift-vouchers.html'>GiveaVoucher</a> — sell digital and postal gift vouchers online.";
-  }
-  if (lower.includes("payment") || lower.includes("tapapay") || lower.includes("card")) {
-    return "💳 Learn more about <a href='/integrated-payments.html'>TapaPay</a> — integrated card payments with faster payouts.";
-  }
-  if (lower.includes("demo") || lower.includes("book")) {
-    return "📅 You can <a href='/book-a-demo.html'>book a demo</a> anytime — we’ll get back to confirm times.";
-  }
-  if (lower.includes("hardware") || lower.includes("terminal") || lower.includes("till")) {
-    return "🖥️ See our <a href='/hardware.html'>hardware options</a> — POS terminals, printers and accessories.";
+
+  // Sitemap contextual search
+  try {
+    const urls = await getSitemapUrls("https://www.rstepos.com/sitemap.xml");
+    const scores = [];
+
+    for (const url of urls) {
+      const text = await fetchSiteText(url);
+      if (!text) continue;
+      const matches = lower
+        .split(/\s+/)
+        .map((w) => (text.toLowerCase().includes(w) ? 1 : 0))
+        .reduce((a, b) => a + b, 0);
+      if (matches > 0) scores.push({ url, matches });
+    }
+
+    scores.sort((a, b) => b.matches - a.matches);
+
+    if (scores.length === 1) {
+      const title = path.basename(scores[0].url).replace(/[-_]/g, " ").replace(".html", "");
+      return `🔎 I think you mean our <a href='${scores[0].url}' target='_blank'>${title}</a> page.`;
+    }
+
+    if (scores.length > 1) {
+      const choices = scores
+        .slice(0, 5)
+        .map(
+          (s) =>
+            `<button class="cb-opt" data-context="sales" data-choice="${s.url}">${path
+              .basename(s.url)
+              .replace(/[-_]/g, " ")
+              .replace(".html", "")}</button>`
+        )
+        .join("");
+      return `💡 I found a few pages mentioning that:<br><div class='cb-options'>${choices}</div>`;
+    }
+  } catch (err) {
+    console.warn("⚠️ Sitemap search failed:", err);
   }
 
   return (
-    "💬 I can help you find the right solution — just tell me your business type (e.g. café, bar, retail, hotel).<br><br>" +
+    "💬 I can help you find the right solution — just tell me your business type (e.g. café, bar, retail, hotel, hospital).<br><br>" +
     "Or browse all <a href='/products.html'>RST EPOS Products</a> to explore."
   );
 }
 
 // ------------------------------------------------------
-// 🌐 Root + Static Route for Render
+// 🌐 Root + Static Route
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.send(`
     <h1>🚀 Tappy Brain v12.2 is Live</h1>
     <p>Your chatbot API is running successfully on Render.</p>
-    <p>Try sending a POST request to <code>/api/chat</code> with { "message": "hello" }</p>
-    <hr>
-    <p><a href="https://www.rstepos.com" target="_blank">Visit RST EPOS Website</a></p>
+    <p>Try POST /api/chat with {"message":"hello"}</p>
   `);
 });
 
-// ------------------------------------------------------
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `🚀 Tappy Brain v12.2 (Agentic Sales + FAQ + Cache) listening on port ${PORT}`
-  );
-});
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Tappy Brain v12.2 listening on port ${PORT}`)
+);
