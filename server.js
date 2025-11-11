@@ -1,6 +1,6 @@
 // =========================================
-// RST EPOS Smart Chatbot API v15.1a
-// "Tappy Brain – Sales FAQs Only (Ranked Search + Yes/No Pills + Branching + Render-safe CORS)"
+// RST EPOS Smart Chatbot API v15.1b
+// "Tappy Brain – Sales FAQs Only (Ranked Search + Yes/No Pills + Branching + Render-safe CORS + 90% Confidence)"
 // =========================================
 
 import express from "express";
@@ -79,9 +79,9 @@ let faqSales = [];
 try {
   if (fs.existsSync(faqSalesPath)) {
     const raw = JSON.parse(fs.readFileSync(faqSalesPath, "utf8"));
-    faqSales = raw.filter(
-      (f) => f && f.title && (Array.isArray(f.steps) || f.intro)
-    );
+    faqSales = raw
+      .filter((f) => f && f.title && (Array.isArray(f.steps) || f.intro))
+      .map((f) => ({ ...f, id: String(f.id) })); // ✅ force string IDs
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
   } else console.warn("⚠️ faqs_sales.json not found");
 } catch (err) {
@@ -118,7 +118,7 @@ function findSalesMatches(message) {
     .filter((r) => r.score >= 6)
     .sort((a, b) => b.score - a.score);
 
-  return scored.map((r) => r.faq);
+  return scored.map((r) => ({ ...r.faq, score: r.score }));
 }
 
 // ------------------------------------------------------
@@ -146,7 +146,7 @@ function showFAQ(entry) {
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (Branch + Confidence Ranking)
+// 💬 Chat Handler (Strict Branch + 90% Match)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -155,41 +155,35 @@ async function handleSalesFAQ(message, sessionId) {
   const s = sessions[sessionId];
   const lower = (message || "").toLowerCase().trim();
 
-  // ✅ 1) Branching yes/no first
+  // ✅ 1. Handle Yes/No branching
   if (s.currentId) {
-    const currentFAQ = faqSales.find((f) => f.id === s.currentId);
+    const currentFAQ = faqSales.find((f) => f.id === String(s.currentId));
     if (currentFAQ?.next?.options) {
-      let nextRef = null;
-      if (lower === "yes" || lower.includes("yes")) nextRef = currentFAQ.next.options.yes;
-      else if (lower === "no" || lower.includes("no")) nextRef = currentFAQ.next.options.no;
+      let nextTarget = null;
+      if (lower.includes("yes")) nextTarget = currentFAQ.next.options.yes;
+      else if (lower.includes("no")) nextTarget = currentFAQ.next.options.no;
 
-      if (nextRef) {
-        const nextFAQ =
-          faqSales.find((f) => String(f.id) === String(nextRef)) ||
-          faqSales.find(
-            (f) =>
-              f.title &&
-              f.title.toLowerCase().trim() === String(nextRef).toLowerCase().trim()
-          );
+      console.log(`🧭 Branching from ${s.currentId} (${currentFAQ.title}) → ${lower.toUpperCase()} → ${nextTarget}`);
 
+      if (nextTarget) {
+        const nextFAQ = faqSales.find((f) => f.id === String(nextTarget));
         if (nextFAQ) {
-          s.currentId = nextFAQ.id;
-          console.log(`↪️ Branch success → ${lower.toUpperCase()} → ${nextFAQ.title}`);
+          s.currentId = String(nextFAQ.id);
+          console.log(`✅ Branch found: ${nextFAQ.id} → ${nextFAQ.title}`);
           return showFAQ(nextFAQ);
         }
-
-        if (typeof nextRef === "string" && nextRef.includes(".html")) {
-          console.log(`🌐 Branch external → ${nextRef}`);
-          return `👉 <a href="${nextRef}" target="_blank">View related info</a>`;
+        if (typeof nextTarget === "string" && nextTarget.includes(".html")) {
+          console.log(`🌐 Branch external link → ${nextTarget}`);
+          return `👉 <a href="${nextTarget}" target="_blank">View related page</a>`;
         }
       }
 
-      console.warn(`⚠️ Branch failed for "${lower}"`);
+      console.warn(`⚠️ nextTarget "${nextTarget}" not found`);
       return `${currentFAQ.next.question} (Yes or No)`;
     }
   }
 
-  // ✅ 2) Exact match
+  // ✅ 2. Exact match
   const normalise = (t) => (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
   const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
   if (exact) {
@@ -198,34 +192,38 @@ async function handleSalesFAQ(message, sessionId) {
     return showFAQ(exact);
   }
 
-  // ✅ 3) Weighted search
+  // ✅ 3. Weighted search
   const scored = findSalesMatches(message);
-  if (!scored.length)
+  if (!scored.length) {
+    console.log(`🙁 No matches for "${message}"`);
     return `🙁 I couldn’t find an exact match.<br><br>Would you like to <a href="/contact-us.html">contact sales</a> or <a href="/faqs.html">browse FAQs</a>?`;
+  }
 
-  // ✅ 4) Auto-select top match if 90% confidence
+  // ✅ 4. Auto-select high-confidence (≥90%)
   if (scored.length > 1) {
-    const topScore = scored[0].score || 0;
-    const nextScore = scored[1]?.score || 0;
-    const ratio = nextScore ? topScore / nextScore : 1;
-    if (ratio >= 1.9 || topScore >= 12) {
+    const top = scored[0].score;
+    const next = scored[1]?.score || 0;
+    const confidence = next ? top / next : 1;
+    if (confidence >= 1.9 || top >= 12) {
       const entry = scored[0];
       s.currentId = entry.id;
-      console.log(`🤖 Auto-selected: ${entry.title}`);
+      console.log(`🤖 Auto-selected high-confidence: ${entry.title}`);
       return showFAQ(entry);
     }
   }
 
-  // ✅ 5) Single match
+  // ✅ 5. Single match
   if (scored.length === 1) {
     const entry = scored[0];
     s.currentId = entry.id;
+    console.log(`🎯 Single match: ${entry.title}`);
     return showFAQ(entry);
   }
 
-  // ✅ 6) Multiple matches → pills
+  // ✅ 6. Multiple matches → pill options
   const trimmed = scored.slice(0, 8);
   const options = trimmed.map((m, i) => ({ label: m.title, index: i + 1 }));
+  console.log(`🧩 Multiple matches (${scored.length})`);
   return { type: "options", intro: "🔍 I found several possible matches:", options };
 }
 
@@ -256,8 +254,8 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) =>
   res.json({
     status: "ok",
-    version: "15.1a",
-    mode: "Sales FAQ + Ranked + Branching",
+    version: "15.1b",
+    mode: "Sales FAQ + Ranked + Branching + 90% Confidence",
     faqs: faqSales.length,
     time: new Date().toISOString(),
   })
@@ -267,5 +265,5 @@ app.get("/", (req, res) =>
 // 🚀 Start server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v15.1a running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v15.1b running on port ${PORT}`)
 );
