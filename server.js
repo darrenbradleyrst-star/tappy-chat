@@ -378,20 +378,15 @@ async function quickSalesLookup(message) {
 }
 
 // ------------------------------------------------------
-// 🌐 Root + Static
+// 🌐 Root + Health Check Endpoint
 // ------------------------------------------------------
 app.get("/", (req, res) => {
-  res.send(`
-    <h1>🚀 Tappy Brain v13.2 Live</h1>
-    <p>Hybrid General Flow (Sales + Support Routing) enabled.</p>
-  `);
-});
-
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v13.2 listening on port ${PORT}`)
-);
+  res.json({
+    status: "ok",
+    version: "13.2",
+    name: "Tappy Brain API",
+    message: "Hybrid General Flow (Sales + Support Routing) enabled.",
+    time: new Date().toISOString()
+  });
 
 
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v13.0 listening on port ${PORT}`)
-);
