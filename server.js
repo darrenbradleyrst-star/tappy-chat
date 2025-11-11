@@ -1,10 +1,10 @@
 // =========================================
-// RST EPOS Smart Chatbot API v13.3
+// RST EPOS Smart Chatbot API v13.4
 // "Tappy Brain + Hybrid Context Router + Lead Capture"
 // ✅ General mode auto-checks Sales + Support
-// ✅ Sales mode: HTML search + pricing intents + lead capture
+// ✅ Sales mode: pricing → lead capture flow works
 // ✅ Support mode: multi-match FAQ links + inline answers
-// ✅ Properly closed braces (Render-safe)
+// ✅ Cookie-based sessions (Render-safe persistence)
 // =========================================
 
 import express from "express";
@@ -12,6 +12,7 @@ import OpenAI from "openai";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
 import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 import xml2js from "xml2js";
@@ -34,10 +35,11 @@ const salesLeadsPath = path.join(__dirname, "sales_leads.jsonl");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
-// 🌐 Express / CORS / Rate Limit
+// 🌐 Express / CORS / Cookies / Rate Limit
 // ------------------------------------------------------
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
+app.use(cookieParser());
 
 app.use(
   cors({
@@ -128,14 +130,22 @@ const sessions = {};
 
 app.post("/api/chat", async (req, res) => {
   const { message, context, reset } = req.body;
-  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+  // ✅ Use cookie-based session ID (persistent across requests)
+  let sessionId = req.cookies.sessionId;
+  if (!sessionId) {
+    sessionId = Math.random().toString(36).substring(2, 10);
+    res.cookie("sessionId", sessionId, { httpOnly: true, sameSite: "none", secure: true, maxAge: 1000 * 60 * 30 });
+  }
+
   if (reset) {
-    sessions[ip] = { step: "none", module: "General", lead: {} };
+    sessions[sessionId] = { step: "none", module: "General", lead: {} };
     return res.json({ reply: "Session reset OK." });
   }
+
   if (!message) return res.status(400).json({ error: "No message provided" });
-  if (!sessions[ip]) sessions[ip] = { step: "none", module: "General", lead: {} };
-  const s = sessions[ip];
+  if (!sessions[sessionId]) sessions[sessionId] = { step: "none", module: "General", lead: {} };
+  const s = sessions[sessionId];
   const lower = message.toLowerCase().trim();
 
   try {
@@ -148,6 +158,7 @@ app.post("/api/chat", async (req, res) => {
     // SALES MODE
     // --------------------------
     if (context === "sales") {
+      // Handle active lead capture sequence
       if (s.step && s.step !== "none") {
         const reply = continueLeadCapture(s, message);
         if (reply.complete) {
@@ -156,47 +167,46 @@ app.post("/api/chat", async (req, res) => {
           s.awaitingPriceConfirm = false;
           s.stepStarted = false;
           return res.json({
-            reply:
-              "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
+            reply: "✅ Thanks — your details have been sent to our sales team. We’ll be in touch shortly!",
           });
         }
         return res.json({ reply: reply.text });
       }
 
+      // Detect pricing intent
       const priceIntent = /(price|quote|cost|subscription|how much|pricing)/i.test(lower);
       if (priceIntent && !s.awaitingPriceConfirm && !s.stepStarted) {
         s.awaitingPriceConfirm = true;
         return res.json({
-          reply:
-            "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
+          reply: "💬 We offer flexible low-monthly plans depending on setup and card fees. I can take your details so someone can give you accurate pricing — would you like that?",
         });
       }
 
+      // Confirm "yes"
       if (s.awaitingPriceConfirm && /^(yes|ok|sure|please|yeah|yep|y|sounds good|why not)$/i.test(lower)) {
         s.awaitingPriceConfirm = false;
         s.stepStarted = true;
         s.step = "name";
         s.lead = {};
-        return res.json({
-          reply: "🙂 Great! What’s your *name*, please?",
-        });
+        return res.json({ reply: "🙂 Great! What’s your *name*, please?" });
       }
 
+      // Decline "no"
       if (s.awaitingPriceConfirm && /^(no|not now|later|maybe|n|nah)$/i.test(lower)) {
         s.awaitingPriceConfirm = false;
         return res.json({
-          reply:
-            "👍 No problem — you can also check our <a href='/products.html'>Products</a> pages for more details, or ask me about a specific feature.",
+          reply: "👍 No problem — you can also check our <a href='/products.html'>Products</a> pages for more details, or ask me about a specific feature.",
         });
       }
 
+      // Waiting for yes/no confirmation
       if (s.awaitingPriceConfirm) {
         return res.json({
-          reply:
-            "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
+          reply: "🤔 Just to confirm — would you like me to take your details so someone can send you pricing information?",
         });
       }
 
+      // Normal sales lookup
       const reply = await handleSalesAgent(message, s);
       return res.json({ reply });
     }
@@ -220,19 +230,23 @@ app.post("/api/chat", async (req, res) => {
       if (supportResult) return res.json({ reply: supportResult });
 
       return res.json({
-        reply:
-          "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
+        reply: "🤔 I couldn’t find that in our site or help articles — could you tell me a bit more? If it’s urgent, you can reach us at <a href='/contact-us.html'>Contact Us</a>.",
       });
     }
   } catch (err) {
     console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Chat service unavailable" });
   }
-}); // ✅ properly closes chat route
+});
 
 // ------------------------------------------------------
 // 🧠 Support Search + Interactive Selection
 // ------------------------------------------------------
+function findSupportMatches(message) {
+  const lower = message.toLowerCase();
+  return faqsSupport.filter((faq) => faq.title.toLowerCase().includes(lower) || faq.keywords?.some(k => lower.includes(k)));
+}
+
 async function handleSupportAgent(message) {
   const s = sessions[Object.keys(sessions)[0]];
   const matches = findSupportMatches(message);
@@ -243,53 +257,20 @@ async function handleSupportAgent(message) {
       const entry = list[idx];
       s.awaitingFaqChoice = false;
       s.lastFaqList = null;
-      return (
-        `📘 *${entry.title}*<br>` +
-        entry.answers.join("<br>") +
-        "<br><br>Did that resolve your issue?"
-      );
+      return `📘 *${entry.title}*<br>${entry.answers.join("<br>")}<br><br>Did that resolve your issue?`;
     }
   }
   if (matches.length === 1) {
     s.awaitingFaqChoice = false;
-    return (
-      `📘 *${matches[0].title}*<br>` +
-      matches[0].answers.join("<br>") +
-      "<br><br>Did that resolve your issue?"
-    );
+    return `📘 *${matches[0].title}*<br>${matches[0].answers.join("<br>")}<br><br>Did that resolve your issue?`;
   }
   if (matches.length > 1) {
     s.awaitingFaqChoice = true;
     s.lastFaqList = matches;
     const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
-    return (
-      "🔍 I found several possible matches:<br><br>" +
-      numbered +
-      "<br><br>Please reply with the number of the article you'd like to view."
-    );
+    return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
   return "🤔 I’m not sure about that one — can you describe the issue in more detail?";
-}
-
-async function quickSupportLookup(message) {
-  const s = sessions[Object.keys(sessions)[0]];
-  const matches = findSupportMatches(message);
-  if (!matches.length) return null;
-  if (matches.length === 1) {
-    return (
-      `🧩 This might help:<br><strong>${matches[0].title}</strong><br>` +
-      matches[0].answers.join("<br>") +
-      "<br><br>Did that fix it?"
-    );
-  }
-  s.awaitingFaqChoice = true;
-  s.lastFaqList = matches;
-  const numbered = matches.map((m, i) => `${i + 1}. ${m.title}`).join("<br>");
-  return (
-    "💡 I found some support articles that might match:<br><br>" +
-    numbered +
-    "<br><br>Please reply with the number of the article you'd like to view."
-  );
 }
 
 // ------------------------------------------------------
@@ -314,28 +295,15 @@ async function handleSalesAgent(message) {
     for (const url of urls) {
       const text = await fetchSiteText(url);
       if (!text) continue;
-      const matches = lower
-        .split(/\s+/)
-        .map((w) => (text.toLowerCase().includes(w) ? 1 : 0))
-        .reduce((a, b) => a + b, 0);
+      const matches = lower.split(/\s+/).map((w) => (text.toLowerCase().includes(w) ? 1 : 0)).reduce((a, b) => a + b, 0);
       if (matches > 0) scores.push({ url, matches });
     }
     scores.sort((a, b) => b.matches - a.matches);
     if (!scores.length)
       return "💬 I can help you find the right solution — tell me your business type (e.g. café, bar, retail).";
-    if (scores.length === 1) {
-      const title = path.basename(scores[0].url).replace(/[-_]/g, " ").replace(".html", "");
-      return `🔎 I think you mean our <a href='${scores[0].url}' target='_blank'>${title}</a> page.`;
-    }
     const links = scores
       .slice(0, 5)
-      .map(
-        (s) =>
-          `<a href='${s.url}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${path
-            .basename(s.url)
-            .replace(/[-_]/g, " ")
-            .replace(".html", "")}</a>`
-      )
+      .map((s) => `<a href='${s.url}' target='_blank' style='display:block;margin:4px 0;color:#0b79b7;'>${path.basename(s.url).replace(/[-_]/g, " ").replace(".html", "")}</a>`)
       .join("");
     return `💡 I found a few pages mentioning that:<br>${links}`;
   } catch {
@@ -345,15 +313,13 @@ async function handleSalesAgent(message) {
 
 async function quickSalesLookup(message) {
   const lower = message.toLowerCase();
-  if (/(buy|system|epos|pos|quote|price|payment|restaurant|retail)/.test(lower)) {
-    const reply = await handleSalesAgent(message);
-    return reply;
-  }
+  if (/(buy|system|epos|pos|quote|price|payment|restaurant|retail)/.test(lower))
+    return await handleSalesAgent(message);
   return null;
 }
 
 // ------------------------------------------------------
-// 🧩 Lead Capture Helper — handles name → company → email → comments
+// 🧩 Lead Capture Helper
 // ------------------------------------------------------
 function continueLeadCapture(s, message) {
   switch (s.step) {
@@ -361,39 +327,33 @@ function continueLeadCapture(s, message) {
       s.lead.name = message.trim();
       s.step = "company";
       return { text: "🏢 Thanks! What’s your *company name*?" };
-
     case "company":
       s.lead.company = message.trim();
       s.step = "email";
       return { text: "📧 And what’s the best *email address* to send details to?" };
-
     case "email":
       if (!isValidEmail(message))
         return { text: "⚠️ That email doesn’t look right — please re-enter it." };
       s.lead.email = message.trim();
       s.step = "comments";
-      return {
-        text: "📝 Great — any specific notes or requirements for your quote? e.g. number of terminals, printers, or card machines?",
-      };
-
+      return { text: "📝 Great — any specific notes or requirements for your quote? e.g. number of terminals, printers, or card machines?" };
     case "comments":
       s.lead.comments = message.trim();
       return { complete: true };
-
     default:
       return { text: "💬 Please continue…" };
   }
 }
 
 // ------------------------------------------------------
-// 🌐 Root + Health Check Endpoint
+// 🌐 Root + Health Check
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "13.3",
+    version: "13.4",
     name: "Tappy Brain API",
-    message: "Hybrid General Flow (Sales + Support Routing) enabled.",
+    message: "Hybrid General Flow (Sales + Support Routing) enabled with persistent sessions.",
     time: new Date().toISOString(),
   });
 });
@@ -402,5 +362,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Tappy Brain v13.3 listening on port ${PORT}`);
+  console.log(`🚀 Tappy Brain v13.4 listening on port ${PORT}`);
 });
