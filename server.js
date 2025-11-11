@@ -1,6 +1,6 @@
 // =========================================
-// RST EPOS Smart Chatbot API v15.3
-// "Tappy Brain – Client-Context Branching + 90% Confidence"
+// RST EPOS Smart Chatbot API v15.3a
+// "Tappy Brain – Persistent currentId + Render-safe CORS + 90% Confidence"
 // =========================================
 
 import express from "express";
@@ -15,17 +15,17 @@ dotenv.config();
 const PORT = process.env.PORT || 3001;
 const app = express();
 
+// ------------------------------------------------------
+// 📁 Paths
+// ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const faqSalesPath = path.join(__dirname, "faqs_sales.json");
 const cacheDir = path.join(__dirname, "cache");
-const sessionFile = path.join(cacheDir, "sessions.json");
-
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
-if (!fs.existsSync(sessionFile)) fs.writeFileSync(sessionFile, "{}");
 
 // ------------------------------------------------------
-// 🌐 Render-safe CORS
+// 🌐 Render-safe CORS (Preflight Fix for Render)
 // ------------------------------------------------------
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
@@ -41,6 +41,7 @@ const allowedOrigins = [
   "http://127.0.0.1:5500",
 ];
 
+// ✅ Handle OPTIONS early to stop Render returning 502
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (req.method === "OPTIONS") {
@@ -51,18 +52,22 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Vary", "Origin");
     return res.status(200).end();
   }
   next();
 });
 
+// ✅ Standard CORS middleware (secondary layer)
 app.use(
   cors({
     origin: (origin, cb) => {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-      return cb(null, true);
+      return cb(null, true); // fallback wildcard for Render
     },
     credentials: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -70,11 +75,14 @@ app.use(
 // 🧠 Load FAQs
 // ------------------------------------------------------
 let faqSales = [];
-if (fs.existsSync(faqSalesPath)) {
-  faqSales = JSON.parse(fs.readFileSync(faqSalesPath, "utf8"))
-    .filter((f) => f && f.title)
-    .map((f) => ({ ...f, id: String(f.id) }));
-  console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
+try {
+  if (fs.existsSync(faqSalesPath)) {
+    const raw = JSON.parse(fs.readFileSync(faqSalesPath, "utf8"));
+    faqSales = raw.filter((f) => f && f.title).map((f) => ({ ...f, id: String(f.id) }));
+    console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
+  } else console.warn("⚠️ faqs_sales.json not found");
+} catch (err) {
+  console.error("❌ Failed to load faqs_sales.json:", err);
 }
 
 // ------------------------------------------------------
@@ -92,16 +100,15 @@ function showFAQ(entry) {
       intro: entry.intro || "",
       steps,
       question: entry.next.question,
-      currentId: entry.id, // 👈 add context for client
+      currentId: entry.id,
     };
   }
 
-  return `📘 <strong>${entry.title}</strong><br>${entry.intro ||
-    ""}<br><br>${steps}<br><br>👉 <a href="${entry.link || "#"}">Learn more</a>`;
+  return `📘 <strong>${entry.title}</strong><br>${entry.intro || ""}<br><br>${steps}<br><br>👉 <a href="${entry.link || "#"}">Learn more</a>`;
 }
 
 // ------------------------------------------------------
-// 💬 Chat Handler (client-context version)
+// 💬 Chat Handler (client-context + ranked search)
 // ------------------------------------------------------
 const sessions = {};
 
@@ -121,15 +128,12 @@ async function handleSalesFAQ(message, sessionId, currentIdFromClient) {
       else if (lower.includes("no")) nextTarget = currentFAQ.next.options.no;
 
       if (nextTarget) {
-        const nextFAQ = faqSales.find(
-          (f) => String(f.id) === String(nextTarget)
-        );
+        const nextFAQ = faqSales.find((f) => String(f.id) === String(nextTarget));
         if (nextFAQ) {
           s.currentId = nextFAQ.id;
           console.log(`✅ Branch success: ${lower.toUpperCase()} → ${nextFAQ.title}`);
           return { reply: showFAQ(nextFAQ), currentId: nextFAQ.id };
         }
-
         if (typeof nextTarget === "string" && nextTarget.includes(".html")) {
           return {
             reply: `👉 <a href="${nextTarget}" target="_blank">View related page</a>`,
@@ -141,8 +145,7 @@ async function handleSalesFAQ(message, sessionId, currentIdFromClient) {
   }
 
   // ✅ 2. Exact title match
-  const normalise = (t) =>
-    (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const normalise = (t) => (t || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
   const exact = faqSales.find((f) => normalise(f.title) === normalise(lower));
   if (exact) {
     s.currentId = exact.id;
@@ -152,11 +155,9 @@ async function handleSalesFAQ(message, sessionId, currentIdFromClient) {
   // ✅ 3. Weighted search
   const scored = faqSales
     .map((f) => {
-      const text = [
-        f.title,
-        f.intro,
-        ...(Array.isArray(f.steps) ? f.steps : []),
-      ].join(" ").toLowerCase();
+      const text = [f.title, f.intro, ...(Array.isArray(f.steps) ? f.steps : [])]
+        .join(" ")
+        .toLowerCase();
       let score = 0;
       if (f.title.toLowerCase() === lower) score += 10;
       if (text.includes(lower)) score += 6;
@@ -184,18 +185,19 @@ async function handleSalesFAQ(message, sessionId, currentIdFromClient) {
     if (confidence >= 1.9 || top >= 12) {
       const entry = scored[0].f;
       s.currentId = entry.id;
+      console.log(`🤖 Auto-selected: ${entry.title}`);
       return { reply: showFAQ(entry), currentId: entry.id };
     }
   }
 
-  // ✅ 5. Single match
+  // ✅ 5. Single strong match
   if (scored.length === 1) {
     const entry = scored[0].f;
     s.currentId = entry.id;
     return { reply: showFAQ(entry), currentId: entry.id };
   }
 
-  // ✅ 6. Multi-match → pill options
+  // ✅ 6. Multiple matches → pill options
   const trimmed = scored.slice(0, 8);
   const options = trimmed.map((m) => ({ label: m.f.title }));
   return {
@@ -205,7 +207,7 @@ async function handleSalesFAQ(message, sessionId, currentIdFromClient) {
 }
 
 // ------------------------------------------------------
-// 🔗 Endpoint
+// 🔗 API Routes
 // ------------------------------------------------------
 app.post("/api/chat", async (req, res) => {
   const { message, currentId } = req.body;
@@ -232,6 +234,19 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+app.get("/", (req, res) =>
+  res.json({
+    status: "ok",
+    version: "15.3a",
+    mode: "Persistent currentId + Render-safe CORS",
+    faqs: faqSales.length,
+    time: new Date().toISOString(),
+  })
+);
+
+// ------------------------------------------------------
+// 🚀 Start Server
+// ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v15.3 running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v15.3a running on port ${PORT}`)
 );
