@@ -1,10 +1,11 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.3
-// "Tappy Brain – Sales FAQs Only (Full JSON Matching)"
+// RST EPOS Smart Chatbot API v14.3b
+// "Tappy Brain – Sales FAQs Only (Debug + Improved Matching)"
 // ✅ Render-safe CORS (fixes 502 preflight)
 // ✅ Loads faq_sales.json only
 // ✅ Searches title, intro, and steps (no keywords needed)
 // ✅ Supports branching logic ("next" → yes/no)
+// ✅ Adds /test?q= route for live search checking
 // =========================================
 
 import express from "express";
@@ -92,25 +93,6 @@ app.use(
 );
 
 // ------------------------------------------------------
-// 🧾 Hardcoded Site Pages (for future AI use)
-// ------------------------------------------------------
-const sitePages = [
-  "https://staging.rstepos.com/back-office-software.html",
-  "https://staging.rstepos.com/bar-pos.html",
-  "https://staging.rstepos.com/bakery-pos.html",
-  "https://staging.rstepos.com/restaurant-pos.html",
-  "https://staging.rstepos.com/cafe-coffee-shop-pos.html",
-  "https://staging.rstepos.com/hotel-pos.html",
-  "https://staging.rstepos.com/retail-pos.html",
-  "https://staging.rstepos.com/members-clubs-pos.html",
-  "https://staging.rstepos.com/school-education-university-pos.html",
-  "https://staging.rstepos.com/hospital-clinic-pos.html",
-  "https://staging.rstepos.com/hardware.html",
-  "https://staging.rstepos.com/book-a-demo.html",
-  "https://staging.rstepos.com/contact-us.html"
-];
-
-// ------------------------------------------------------
 // 📚 Load Sales FAQs
 // ------------------------------------------------------
 let faqSales = [];
@@ -121,30 +103,33 @@ try {
       (f) => f && f.title && (Array.isArray(f.steps) || f.intro)
     );
     console.log(`✅ Loaded ${faqSales.length} Sales FAQ entries`);
+    console.log("🧠 First FAQ entry preview:", faqSales[0]);
   } else console.warn("⚠️ faq_sales.json not found");
 } catch (err) {
   console.error("❌ Failed to load faq_sales.json:", err);
 }
 
 // ------------------------------------------------------
-// 🧠 Helper: Find FAQ Matches (by title, intro, steps)
+// 🧠 Helper: Find FAQ Matches (title + intro + steps)
 // ------------------------------------------------------
 function findSalesMatches(message) {
-  const lower = (message || "").toLowerCase();
+  const lower = (message || "").toLowerCase().trim();
+  if (!lower) return [];
 
   return faqSales.filter((faq) => {
-    const blob = [
+    const text = [
       faq.title || "",
       faq.intro || "",
       ...(Array.isArray(faq.steps) ? faq.steps : [])
     ]
       .join(" ")
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " "); // remove punctuation for cleaner match
 
-    // Broad fuzzy match: entire phrase or any word
+    // broad fuzzy match
     return (
-      blob.includes(lower) ||
-      lower.split(" ").some((word) => blob.includes(word))
+      text.includes(lower) ||
+      lower.split(" ").some((w) => w.length > 2 && text.includes(w))
     );
   });
 }
@@ -235,16 +220,28 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
+// 🧪 Debug Route for Testing Search
+// ------------------------------------------------------
+app.get("/test", (req, res) => {
+  const q = req.query.q || "hardware";
+  const result = findSalesMatches(q);
+  res.json({
+    query: q,
+    matches: result.map((f) => f.title),
+    count: result.length
+  });
+});
+
+// ------------------------------------------------------
 // 🌐 Root Check
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.3",
+    version: "14.3b",
     mode: "Sales FAQ Only",
     faqs: faqSales.length,
-    pages: sitePages.length,
-    message: "Tappy Brain: Sales FAQ JSON only (full matching)",
+    message: "Tappy Brain: Sales FAQ JSON only (debug mode)",
     time: new Date().toISOString()
   });
 });
@@ -253,5 +250,5 @@ app.get("/", (req, res) => {
 // 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.3 (Sales FAQ Only) running on port ${PORT}`)
+  console.log(`🚀 Tappy Brain v14.3b (Sales FAQ Only) running on port ${PORT}`)
 );
