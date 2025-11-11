@@ -1,9 +1,8 @@
 // =========================================
-// RST EPOS Smart Chatbot API v14.0
-// "Tappy Brain + Local HTML Index + FAQ + AI Fallback"
-// ✅ Reads local HTML files from /pages/
-// ✅ Full FAQ + AI fallback
-// ✅ All links stay in same tab
+// RST EPOS Smart Chatbot API v14.1
+// "Tappy Brain + Full Hardcoded HTML Page List + FAQ + AI Fallback"
+// ✅ Uses your exact HTML filenames (from screenshots)
+// ✅ Keeps all FAQ, AI fallback, and sales logic
 // =========================================
 
 import express from "express";
@@ -12,10 +11,11 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
-import fs from "fs";
-import path from "path";
+import fetch from "node-fetch";
 import * as cheerio from "cheerio";
+import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 dotenv.config();
 const PORT = process.env.PORT || 3001;
@@ -27,8 +27,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // ------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const pagesDir = path.join(__dirname, "pages"); // where all your .html files live
+const cacheDir = path.join(__dirname, "cache");
 const faqsSupportPath = path.join(__dirname, "faqs_support.json");
+if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
 // ------------------------------------------------------
 // 🌐 Middleware
@@ -39,10 +40,10 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: [
-      "http://localhost:8080",
-      "http://127.0.0.1:8080",
       "https://staging.rstepos.com",
       "https://www.rstepos.com",
+      "http://localhost:8080",
+      "http://127.0.0.1:8080",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
@@ -65,14 +66,57 @@ app.use(
 );
 
 // ------------------------------------------------------
-// 🧾 Load all local HTML pages
+// 🧾 Hardcoded HTML Pages from your screenshots
 // ------------------------------------------------------
-const sitePages = fs
-  .readdirSync(pagesDir)
-  .filter((f) => f.endsWith(".html"))
-  .map((f) => path.join(pagesDir, f));
-
-console.log(`✅ Loaded ${sitePages.length} local pages from /pages`);
+const sitePages = [
+  "https://staging.rstepos.com/back-office-software.html",
+  "https://staging.rstepos.com/bakery-pos.html",
+  "https://staging.rstepos.com/bar-pos.html",
+  "https://staging.rstepos.com/book-a-demo.html",
+  "https://staging.rstepos.com/cafe-coffee-shop-pos.html",
+  "https://staging.rstepos.com/case-studies.html",
+  "https://staging.rstepos.com/contact-us.html",
+  "https://staging.rstepos.com/convenience-store-pos.html",
+  "https://staging.rstepos.com/cookie-consent.html",
+  "https://staging.rstepos.com/cookie-policy.html",
+  "https://staging.rstepos.com/digital-gift-vouchers.html",
+  "https://staging.rstepos.com/faqs.html",
+  "https://staging.rstepos.com/farm-shop-pos.html",
+  "https://staging.rstepos.com/fastfood-pizza-pos.html",
+  "https://staging.rstepos.com/festival-events-pos.html",
+  "https://staging.rstepos.com/food-truck-pos.html",
+  "https://staging.rstepos.com/gift-shop-pos.html",
+  "https://staging.rstepos.com/hardware.html",
+  "https://staging.rstepos.com/help.html",
+  "https://staging.rstepos.com/hospital-clinic-pos.html",
+  "https://staging.rstepos.com/hospitality-pos.html",
+  "https://staging.rstepos.com/hotel-pos.html",
+  "https://staging.rstepos.com/index.html",
+  "https://staging.rstepos.com/integrated-credit-cards.html",
+  "https://staging.rstepos.com/iwantfed-online-ordering.html",
+  "https://staging.rstepos.com/kitchen-display-system.html",
+  "https://staging.rstepos.com/members-clubs-pos.html",
+  "https://staging.rstepos.com/membership-app.html",
+  "https://staging.rstepos.com/mobile-pos.html",
+  "https://staging.rstepos.com/off-sales-pos.html",
+  "https://staging.rstepos.com/pci.html",
+  "https://staging.rstepos.com/pos-integrations.html",
+  "https://staging.rstepos.com/pos-software.html",
+  "https://staging.rstepos.com/privacy-policy.html",
+  "https://staging.rstepos.com/protel-pms-hotel-software.html",
+  "https://staging.rstepos.com/resources.html",
+  "https://staging.rstepos.com/restaurant-pos.html",
+  "https://staging.rstepos.com/retail-pos.html",
+  "https://staging.rstepos.com/school-education-university-pos.html",
+  "https://staging.rstepos.com/stadium-pos.html",
+  "https://staging.rstepos.com/standalone-credit-cards.html",
+  "https://staging.rstepos.com/stock-control-software.html",
+  "https://staging.rstepos.com/support.html",
+  "https://staging.rstepos.com/table-reservations-software.html",
+  "https://staging.rstepos.com/tapapay-credit-cards.html",
+  "https://staging.rstepos.com/terms.html",
+  "https://staging.rstepos.com/waiter-ordering-system.html",
+];
 
 // ------------------------------------------------------
 // 📚 Load Support FAQs
@@ -89,9 +133,7 @@ try {
         f.answers.length
     );
     console.log(`✅ Loaded ${faqsSupport.length} FAQ entries`);
-  } else {
-    console.warn("⚠️ faqs_support.json not found");
-  }
+  } else console.warn("⚠️ faqs_support.json not found");
 } catch (err) {
   console.error("❌ Failed to load faqs_support.json:", err);
 }
@@ -108,25 +150,33 @@ function findSupportMatches(message) {
 }
 
 // ------------------------------------------------------
-// 🧠 Analyze Local HTML Page with OpenAI
+// 🧠 OpenAI Page Analyzer
 // ------------------------------------------------------
-async function analyzeLocalPage(filePath, query) {
+async function analyzePageWithAI(url, query) {
   try {
-    const html = fs.readFileSync(filePath, "utf8");
+    const cacheFile = path.join(cacheDir, url.replace(/[^a-z0-9]/gi, "_") + ".txt");
+    let html = "";
+    if (fs.existsSync(cacheFile)) {
+      html = fs.readFileSync(cacheFile, "utf8");
+    } else {
+      const res = await fetch(url);
+      html = await res.text();
+      fs.writeFileSync(cacheFile, html);
+    }
+
     const $ = cheerio.load(html);
     $("script,style,nav,footer,header").remove();
     const text = $("body").text().replace(/\s+/g, " ").trim().slice(0, 4000);
 
     const prompt = `
-You are a helpful assistant for RST EPOS.
+You are a helpful RST EPOS assistant.
 A user asked about: "${query}"
 
-Here is the page content:
+Here is the page content from ${url}:
 
 ${text}
 
-Determine if this page answers the user's query.
-If yes, summarise it in 2–3 short sentences.
+If this page answers the user's query, summarise it in 2–3 short sentences.
 If not relevant, reply "NO_MATCH".
 `;
 
@@ -139,22 +189,19 @@ If not relevant, reply "NO_MATCH".
 
     const reply = ai.choices[0]?.message?.content?.trim() || "";
     if (/NO_MATCH/i.test(reply)) return null;
-
-    const filename = path.basename(filePath);
-    const url = "/" + filename.replace(".html", "");
     return `💡 I found a page that might help:<br><a href="${url}">${url}</a><br><br>${reply}`;
   } catch (err) {
-    console.error("❌ analyzeLocalPage failed:", err);
+    console.error("❌ analyzePageWithAI failed:", err.message);
     return null;
   }
 }
 
 // ------------------------------------------------------
-// 🤖 AI Site Search (Local Only)
+// 🤖 AI Fallback Search (Iterates all hardcoded pages)
 // ------------------------------------------------------
-async function aiSearchLocal(message) {
-  for (const filePath of sitePages) {
-    const result = await analyzeLocalPage(filePath, message);
+async function aiSearchSite(message) {
+  for (const url of sitePages) {
+    const result = await analyzePageWithAI(url, message);
     if (result) return result;
   }
   return null;
@@ -197,7 +244,7 @@ async function handleSupportAgent(message, sessionId) {
     return `🔍 I found several possible matches:<br><br>${numbered}<br><br>Please reply with the number of the article you'd like to view.`;
   }
 
-  const aiResult = await aiSearchLocal(message);
+  const aiResult = await aiSearchSite(message);
   if (aiResult) return aiResult;
 
   return `🙁 I couldn’t find an exact match.<br><br>
@@ -217,17 +264,28 @@ async function handleSalesAgent(message) {
 📅 You can <a href="/book-a-demo.html">book a demo</a> and one of our team will show you detailed pricing and features.`;
   }
 
-  const quick = [
-    { k: ["bar"], url: "/bar-pos.html", label: "Bar POS Systems" },
-    { k: ["bakery"], url: "/bakery-pos.html", label: "Bakery POS Systems" },
-    { k: ["restaurant"], url: "/restaurant-pos.html", label: "Restaurant POS Systems" },
-    { k: ["cafe", "coffee"], url: "/cafe-coffee-shop-pos.html", label: "Café POS Systems" },
-    { k: ["hotel"], url: "/hotel-pos.html", label: "Hotel POS Systems" },
-    { k: ["retail", "shop"], url: "/retail-pos.html", label: "Retail POS Systems" },
-    { k: ["member"], url: "/members-clubs-pos.html", label: "Members’ Club POS Systems" },
-    { k: ["school", "education"], url: "/school-education-university-pos.html", label: "Education POS Systems" },
-    { k: ["hospital"], url: "/hospital-clinic-pos.html", label: "Hospital POS Systems" },
-  ];
+const quick = [
+  { k: ["bar", "pub", "nightclub"], url: "/bar-pos.html", label: "Bar POS Systems" },
+  { k: ["bakery", "patisserie"], url: "/bakery-pos.html", label: "Bakery POS Systems" },
+  { k: ["restaurant", "bistro", "dining"], url: "/restaurant-pos.html", label: "Restaurant POS Systems" },
+  { k: ["cafe", "coffee", "coffee shop"], url: "/cafe-coffee-shop-pos.html", label: "Café & Coffee Shop POS Systems" },
+  { k: ["hotel", "guestline", "protel", "mews", "accommodation"], url: "/hotel-pos.html", label: "Hotel & Hospitality POS Systems" },
+  { k: ["retail", "shop", "store", "boutique"], url: "/retail-pos.html", label: "Retail POS Systems" },
+  { k: ["member", "membership", "club", "golf"], url: "/members-clubs-pos.html", label: "Members’ Club POS Systems" },
+  { k: ["education", "school", "college", "university", "canteen"], url: "/school-education-university-pos.html", label: "Education & Canteen POS Systems" },
+  { k: ["hospital", "clinic", "healthcare"], url: "/hospital-clinic-pos.html", label: "Hospital & Healthcare POS Systems" },
+  { k: ["farm", "farm shop", "deli"], url: "/farm-shop-pos.html", label: "Farm Shop POS Systems" },
+  { k: ["fast food", "pizza", "takeaway"], url: "/fastfood-pizza-pos.html", label: "Fast Food & Pizza POS Systems" },
+  { k: ["festival", "event", "mobile event"], url: "/festival-events-pos.html", label: "Festival & Events POS Systems" },
+  { k: ["food truck", "street food", "van"], url: "/food-truck-pos.html", label: "Food Truck POS Systems" },
+  { k: ["gift shop", "souvenir"], url: "/gift-shop-pos.html", label: "Gift Shop POS Systems" },
+  { k: ["convenience", "corner shop", "newsagent"], url: "/convenience-store-pos.html", label: "Convenience Store POS Systems" },
+  { k: ["stadium", "arena", "sports"], url: "/stadium-pos.html", label: "Stadium & Venue POS Systems" },
+  { k: ["off licence", "off sales", "wine shop"], url: "/off-sales-pos.html", label: "Off-Sales & Off-Licence POS Systems" },
+  { k: ["mobile", "portable", "pop up"], url: "/mobile-pos.html", label: "Mobile POS Systems" },
+  { k: ["hospitality", "restaurant", "bar", "cafe"], url: "/hospitality-pos.html", label: "Hospitality POS Overview" },
+];
+
 
   for (const q of quick) {
     if (q.k.some((kw) => lower.includes(kw))) {
@@ -235,14 +293,14 @@ async function handleSalesAgent(message) {
     }
   }
 
-  const aiResult = await aiSearchLocal(message);
+  const aiResult = await aiSearchSite(message);
   if (aiResult) return aiResult;
 
   return "💬 Tell me what type of business you run (e.g. café, bar, retail), and I’ll show you the best solution.";
 }
 
 // ------------------------------------------------------
-// 💬 Chat Route
+// 💬 Chat
 // ------------------------------------------------------
 const sessions = {};
 
@@ -271,21 +329,21 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ------------------------------------------------------
-// 🌐 Health
+// 🌐 Root Check
 // ------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    version: "14.0",
+    version: "14.1",
     pages: sitePages.length,
-    message: "Reads local HTML pages for AI context.",
+    message: "Using full hardcoded staging HTML pages list.",
     time: new Date().toISOString(),
   });
 });
 
 // ------------------------------------------------------
-// 🚀 Start
+// 🚀 Start Server
 // ------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Tappy Brain v14.0 running — using local /pages HTML files`)
+  console.log(`🚀 Tappy Brain v14.1 listening on port ${PORT}`)
 );
